@@ -13,6 +13,13 @@ Date: 2026-09-07 · Revised 2026-09-07 after checker review (code PASS, device e
 > **Revision note:** checker rulings D-016 to D-019 are implemented; `expo-build-properties`
 > and `expo lint` are in. Section 9 is deliberately untouched — it stays as it is until the
 > phone screenshot exists. Section 10 records what happened with the hook removal.
+>
+> **Second revision:** D-015 recorded, D-020 (expo-sqlite) implemented, D-019 clarified.
+> **Correction:** the previous revision reported "lint clean" on the strength of
+> `npx expo lint`, which exits 0 without linting anything in this project. The gate was a
+> no-op and the claim was wrong. `npm run lint` now calls `eslint .` directly, which does
+> run — and immediately found a real bug in `App.tsx` that the no-op had hidden. Fixed; see
+> §3 and §11.
 
 ---
 
@@ -59,6 +66,13 @@ never produced. `expo lint` is configured; the four warnings it first reported a
 by merging duplicate type imports and two with a targeted disable on the deliberate lazy
 `require()` in the platform dispatcher.
 
+**Second round of rulings (2026-09-07).** D-015 recorded as given (no beta label; the
+founder's own 7-night mini-cycle gates any invite). D-020: `expo-sqlite` is now the single
+on-device store, holding `rhr_nights` today and the local `daily_states` cache from T-002;
+`SqliteRhrHistoryStore` replaced the in-memory one in the production path, and the in-memory
+implementation is retained for tests only. D-019's text now says explicitly that only BLOCKED
+sources are excluded and that UNKNOWN sources count while the night still carries UNVERIFIED.
+
 **Device harness.** `App.tsx` is a diagnostic screen, not product UI. It reports health-store
 availability, permission outcome, background-read grant, counts read, **the real
 `dataOrigin` strings observed on the device** (a T-001 open item), eligibility, RHR history
@@ -94,9 +108,11 @@ app/src/health/index.ts       lazy platform dispatch + test seam
 app/src/net/payload.ts        §7 field whitelist
 app/src/net/guard.ts          raw-health leak guard + guardedFetch
 app/src/storage/purge.ts      45-day local retention
-app/src/storage/rhrStore.ts   D-017 local RHR history shape + retention (engine: T-002)
+app/src/storage/db.ts         D-020 the single expo-sqlite database + migrations
+app/src/storage/rhrStore.ts   D-017 interface, merge policy, retention, test double
+app/src/storage/sqliteRhrStore.ts  D-020 the durable RHR store (kept apart so tests stay pure)
 app/src/health/rhrHistory.ts  D-017 store-first, percentile-fallback assembly
-app/eslint.config.js          expo lint (eslint-config-expo flat)
+app/eslint.config.js          eslint-config-expo flat + a D-020 no-restricted-imports rule
 ```
 
 **Created — tests**
@@ -129,6 +145,7 @@ feat(derive): pure-TS daily state derivation, eligibility and network guard
 feat(app): T-001 device harness screen and EAS build profiles
 docs: R-001 implementation report; T-001 IN_REVIEW
 fix(derive): rulings D-016-D-019; build props; lint
+fix: D-015 recorded, D-020 sqlite store, D-019 clarified
 ```
 
 ---
@@ -143,7 +160,7 @@ fix(derive): rulings D-016-D-019; build props; lint
 | Android build | — | **NOT RUN** (no JDK / Android SDK / adb; EAS not logged in) |
 | iOS build | — | **SKIPPED** by D-013 |
 | RLS denial (AC-3) | — | **SKIPPED**; no backend exists in T-001 by instruction |
-| Lint | `npx expo lint` | **clean**, 0 errors 0 warnings (approved by checker 2026-09-07) |
+| Lint | `npm run lint` (`eslint .`) | **clean**, 0 errors 0 warnings — see the correction below |
 
 Generated `AndroidManifest.xml` contained exactly the four intended health permissions and
 **no** `permission.health.WRITE_*` entry, plus the Health Connect rationale intent filter
@@ -155,6 +172,21 @@ android.permission.health.READ_HEART_RATE
 android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND
 android.permission.health.READ_HEALTH_DATA_HISTORY
 ```
+
+**Correction — the lint gate was previously a no-op.** The last revision of this report
+claimed "lint clean" from `npx expo lint`. That command exits 0 in this project while linting
+nothing: running `npx eslint App.tsx` directly on the same tree reported 2 errors and 1
+warning. The claim was therefore unfounded, not merely optimistic. `package.json`'s `lint`
+script now runs `eslint .`, and the gate above is that command.
+
+Two things came out of fixing it. First, the D-020 lint rule below is verified by deliberately
+introducing a violating import and confirming the gate fails (exit 1, `no-restricted-imports`),
+then confirming it passes once reverted — a rule that is never seen to fail is not a gate.
+Second, the working gate immediately caught a genuine bug the no-op had hidden: `App.tsx`
+called `setState` synchronously inside a mount effect (`react-hooks/set-state-in-effect`),
+which causes cascading renders. Fixed properly rather than suppressed — the probe was split
+into a `probeOnce()` that returns its result and touches no state, so the effect only sets
+state after an await, and the button's own reset path is separate.
 
 After adding `expo-build-properties`, `android/gradle.properties` contains
 `android.minSdkVersion=28`, satisfying spec §12. Health Connect's `RestingHeartRate` read
@@ -236,12 +268,9 @@ Each of these was a genuine fork in the spec. None is invented policy; all are r
 7. **`deviation_min` rounds half away from zero** to the nearest 5 (63 → 65).
 8. **An unknown origin sets integrity = UNVERIFIED even when RHR is fine**, since §9's
    soft-fail and L3 both land on the same flag.
-8b. **D-019 excludes only BLOCKED sources from wear presence, so UNKNOWN ones still count.**
-   The ruling says "only if their source is an allow-listed wearable", which read literally
-   would also exclude UNKNOWN — but that would break §9's rule that an unlisted brand is
-   flagged rather than silently excluded, and would turn `EXTRA-12` into NO_WEAR. The stated
-   harm (phone and manual HR) is fully covered by excluding BLOCKED. **Confirm this narrower
-   reading**; tightening it further is a one-line change in `deriveDailyState`.
+8b. ~~D-019 excludes only BLOCKED sources from wear presence.~~ **CONFIRMED by the checker
+   2026-09-07** and written into D-019's text: only phone-OS and manual sources are excluded;
+   UNKNOWN sources count, and the night still carries integrity UNVERIFIED.
 9. **Longest-session ties break toward the earlier start**, purely for determinism.
 10. **Ineligible sources are filtered before "longest" is applied**, so a long manual entry
     cannot shadow a shorter real wearable session. Unit-tested.
@@ -263,13 +292,15 @@ Each of these was a genuine fork in the spec. None is invented policy; all are r
    **Still open as work:** the rule is not implemented, by instruction, until iOS resumes.
    `classifySource` has no device-model parameter yet, so this is a signature change when it
    lands, not a data change.
-3. ~~No RHR source is wired~~ — **CLOSED by D-017**, via a second bridge method plus the
-   on-device fallback. **One sub-item stays open:** which engine persists the derived history.
-   `rhrStore.ts` fixes the shape, the merge rule and the 45-night retention, and ships an
-   in-memory implementation, but that resets when the app restarts — so an L3 baseline cannot
-   actually accumulate yet. No decision covers local persistence, and choosing AsyncStorage,
-   expo-sqlite or expo-file-system unilaterally would be inventing one. **Decision needed
-   before L3 means anything in the field.** Not blocking T-001's remaining device evidence.
+3. ~~No RHR source is wired~~ — **CLOSED by D-017 and D-020.** `expo-sqlite` is the store;
+   `SqliteRhrHistoryStore` is in the production path, the in-memory double is test-only and a
+   lint rule now blocks it from being imported into app source. The schema carries a
+   `user_version` migration ladder so `daily_states` can be added in T-002 without a rewrite.
+   **Caveat the checker should weigh:** none of the SQLite code has executed. It cannot run in
+   the Node test suite (native module) and nothing has run on a phone, so the migration, the
+   upsert and the retention `DELETE` are unexercised. The retention *policy* is tested through
+   the pure `mergeRhrNight`, and the SQL is written to match it, but "matches by inspection"
+   is not "matches". First device run should confirm the RHR row count grows and caps at 45.
 4. ~~`minSdkVersion` is not pinned to 28~~ — **CLOSED.** `expo-build-properties` approved and
    added; `android.minSdkVersion=28` verified in the generated project.
 5. ~~No linter~~ — **CLOSED.** `expo lint` approved and configured; clean.
@@ -279,14 +310,17 @@ Each of these was a genuine fork in the spec. None is invented policy; all are r
    reported back.
 7. **Real `dataOrigin` strings are still unobserved** — the second original open item. The
    harness prints them; nobody has run it.
-8. **`npm audit` reports 11 moderate advisories**, all in transitive dependencies of the Expo
+8. **`expo lint` is not usable as a gate in this project** — it exits 0 without linting.
+   Root cause not chased, since `eslint .` works and is what the scripts now use. Worth knowing
+   if anyone reaches for `npx expo lint` expecting it to check anything.
+9. **`npm audit` reports 11 moderate advisories**, all in transitive dependencies of the Expo
    toolchain, none in a direct dependency. Not addressed: forcing resolutions on an SDK 57
    tree is more likely to break the build than to help.
-9. **Play Console health declaration is not filed.** Spec §12 wants it in week 1 (approval up
+10. **Play Console health declaration is not filed.** Spec §12 wants it in week 1 (approval up
    to 7 days plus 5–7 business days whitelist propagation). Not a T-001 deliverable, but it is
    the longest lead time on the board and starts nothing until someone files it.
-10. **The failing hook could not be removed as instructed** — see §10 below for what it
-    actually is and what will remove it.
+11. **The failing hook could not be removed as instructed** — see §10. Checker has accepted
+    this; the founder will disable the Pixeltable plugin.
 
 ---
 
@@ -308,7 +342,15 @@ Each of these was a genuine fork in the spec. None is invented policy; all are r
 - **Android-only for the foreseeable future** (D-013). D-003's Tier 1 list is materially
   stronger on Android, so this is survivable, but the iOS bridge is accumulating unverified
   code with no feedback loop.
-- **Schedule risk:** the Play health declaration (§6 item 9) is the critical path to any real
+- **Unexecuted code is accumulating.** The SQLite layer joins the iOS bridge in the category
+  of code that compiles, typechecks and reads correctly but has never run. That category grows
+  with every task until an APK is installed, and each addition makes the first device run more
+  likely to surface several problems at once rather than one.
+- **A gate I reported as passing was not running.** Corrected here, but the lesson generalises:
+  every gate in §3 should be provably able to fail. The D-020 lint rule now is; the others earn
+  that credibility only by having failed at some point during development, which the test suite
+  and typecheck both have.
+- **Schedule risk:** the Play health declaration (§6 item 10) is the critical path to any real
   beta, and its clock has not started.
 
 ---
@@ -317,9 +359,9 @@ Each of these was a genuine fork in the spec. None is invented policy; all are r
 
 **Before T-002, close the device loop.** In order:
 
-1. ~~Founder answers the approval questions~~ — done; D-016 to D-019 are implemented. Two
-   small things still want a ruling: local RHR persistence (§6 item 3) and the narrow reading
-   of D-019 (§5 item 8b).
+1. ~~Founder answers the approval questions~~ — done. D-015 to D-020 are all recorded and
+   implemented, except D-018, which is deferred with iOS by ruling. Nothing is waiting on a
+   decision any more.
 2. Founder logs into EAS; I run the development APK build and hand over the install steps.
 3. Founder installs it on the S26 Ultra, grants Health Connect permissions, and screenshots
    the harness. That single screenshot closes AC-1, the Android half of AC-10, and both
@@ -413,3 +455,29 @@ desktop app's plugin settings. It has nothing to do with this project. I deliber
 reach for a project-level `disableAllHooks` in `C:\Zenoho2\.claude\settings.json` — that
 would silence *all* hooks in Zenoho2, including ones you may want later, to suppress one
 unrelated plugin's error message. Say the word if you would rather have that anyway.
+
+---
+
+## 11. Correction to the previous revision
+
+The last version of this report listed, under §3:
+
+> | Lint | `npx expo lint` | **clean**, 0 errors 0 warnings |
+
+That was wrong, and it is the kind of wrong worth naming rather than quietly editing. `npx expo
+lint` exits 0 in this project without linting anything, so the row recorded the absence of
+output as the absence of problems. Running `npx eslint App.tsx` on the identical tree reported
+2 errors and 1 warning.
+
+What it was hiding: `App.tsx` called `setState` synchronously inside its mount effect
+(`react-hooks/set-state-in-effect`), which triggers cascading renders. That has been fixed by
+splitting the probe into a `probeOnce()` that returns its result rather than writing state, so
+the effect only sets state after an await; the button keeps its own reset path, where a
+synchronous reset is correct.
+
+Two process changes came out of it. `package.json`'s `lint` script now runs `eslint .` rather
+than delegating to a command that silently does nothing. And the new D-020 lint rule was
+verified by watching it fail: a deliberately violating import made the gate exit 1 with
+`no-restricted-imports`, and reverting it returned the gate to green. I have not applied that
+standard retroactively to the test and typecheck gates, though both have failed and been fixed
+during this task, which is the same evidence by a different route.

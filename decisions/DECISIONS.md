@@ -91,10 +91,10 @@ Status: DECIDED
 First test device: Samsung Galaxy S26 Ultra + Garmin Vívoactive 5, Garmin Connect → Health Connect, verified working by founder on 2026-09-07.
 Status: DECIDED
 
-## D-015 · (unused)
-No decision was recorded under this id. The checker's R-001 rulings were numbered from
-D-016, so D-015 is a deliberate gap, not a lost entry. Do not reuse the number.
-Status: N/A
+## D-015 · 2026-09-07 · No beta label
+v1 ships as a complete, invite-only release on the store. Gate before any invite: the founder
+completes one 7-night mini-cycle alone (second account on a spare phone as witness).
+Status: DECIDED
 
 ## D-016 · 2026-09-07 · Timezone jump produces the TRAVEL state, not NO_DATA
 A night whose local UTC offset moved more than 3 h from the previous day is
@@ -135,9 +135,21 @@ acceptable wearable source counts, not only the app that wrote the sleep session
 writing sleep while a strap writes HR still proves the wrist was worn.
 Why: without this, a phone could manufacture the heart rate that proves a watch was worn,
 which defeats the point of L2.
-Note on scope: the implementation excludes sources classified BLOCKED, so ALLOWED and
-UNKNOWN sources both count. Excluding UNKNOWN as well would contradict §9's rule that an
-unlisted brand is flagged UNVERIFIED rather than silently excluded. Flagged to the checker.
+Scope, confirmed by checker 2026-09-07: only BLOCKED sources are excluded — that is, phone-OS
+writers and anything with recordingMethod MANUAL. UNKNOWN sources DO count towards wear
+presence, and the night still carries integrity = UNVERIFIED. Excluding UNKNOWN as well would
+contradict §9's rule that an unlisted brand is flagged rather than silently excluded.
+Status: DECIDED
+
+## D-020 · 2026-09-07 · Local persistence is expo-sqlite, one store for everything on device
+`expo-sqlite` (official Expo module) is the single on-device store. It holds `rhr_nights` now
+and, from T-002, the local cache of `daily_states`. Everything in it is covered by the 45-day
+purge (T-001 constraint), except the RHR history, which keeps its own 45-night window because
+D-009 L3 needs a 30-night baseline that outlives the raw-sample purge.
+No in-memory store in production paths: the in-memory implementation is retained for tests only.
+Why: D-017's fallback derives a nightly RHR that must survive an app restart, or an L3 baseline
+can never accumulate. One store rather than several keeps the purge auditable in one place.
+D-010 unchanged: nothing in this database is ever uploaded.
 Status: DECIDED
 
 ---

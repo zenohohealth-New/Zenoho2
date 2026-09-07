@@ -51,7 +51,8 @@
           "NSHealthShareUsageDescription": "Zenoho reads your sleep sessions and heart rate on this device to check whether you kept your own sleep-window promise. These raw values stay on your phone and are never uploaded.",
           "NSHealthUpdateUsageDescription": false
         }
-      ]
+      ],
+      "expo-sqlite"
     ]
   }
 }

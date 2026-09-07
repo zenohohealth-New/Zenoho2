@@ -1,15 +1,16 @@
 /**
- * Nightly resting-heart-rate history, kept on the device (D-010, D-017).
+ * Nightly resting-heart-rate history, kept on the device (D-010, D-017, D-020).
  *
- * D-017's fallback path needs somewhere to keep the derived value, because the
- * 10th-percentile figure is computed from a night's HR samples and those samples
- * are purged at 45 days — while the L3 baseline needs 30 nights of RHR.
+ * D-017's fallback path needs somewhere durable to keep the derived value: the
+ * 10th-percentile figure is computed from a night's HR samples, those samples are
+ * purged at 45 days, and the L3 baseline needs 30 nights of RHR. So this history
+ * keeps its own 45-night window rather than riding the raw-sample purge.
  *
- * The durable engine is deliberately NOT chosen here. No decision covers local
- * persistence yet, and picking AsyncStorage / expo-sqlite / expo-file-system
- * unilaterally would be inventing one. This module fixes the shape and the
- * retention rule; T-002 supplies a `RhrHistoryStore` that survives a restart.
- * See R-001 §6.
+ * D-020: the durable implementation is `SqliteRhrHistoryStore` in ./sqliteRhrStore,
+ * backed by the one `expo-sqlite` database. It lives in a separate module so that
+ * this one stays pure and importable from Node tests without native modules.
+ * `InMemoryRhrHistoryStore` below is for tests only and must not appear in a
+ * production path.
  */
 import type { RhrNight } from '../derive/types';
 
@@ -17,7 +18,7 @@ import type { RhrNight } from '../derive/types';
 export const RHR_HISTORY_DAYS = 45;
 
 export interface RhrHistoryStore {
-  /** Newest-last, oldest first, at most `RHR_HISTORY_DAYS` entries. */
+  /** Oldest first, newest last, at most `RHR_HISTORY_DAYS` entries. */
   load(): Promise<RhrNight[]>;
   /** Upsert one night. Re-deriving the same night overwrites it. */
   put(night: RhrNight): Promise<void>;
@@ -25,7 +26,8 @@ export interface RhrHistoryStore {
 
 /**
  * Merge a night into a history list: newest-last, one entry per date, trimmed to
- * the retention window. Pure, so the policy is testable without an engine.
+ * the retention window. Pure, so the policy is testable without a database — and
+ * it is the same policy the SQL below enforces.
  */
 export function mergeRhrNight(
   history: readonly RhrNight[],
@@ -40,11 +42,11 @@ export function mergeRhrNight(
 }
 
 /**
- * In-memory implementation. Correct for a single app session and used by tests;
- * it loses everything on restart, which is exactly why T-002 must replace it.
+ * TEST ONLY (D-020). Loses everything on restart, so an L3 baseline can never
+ * accumulate behind it — never wire this into a production path.
  */
 export class InMemoryRhrHistoryStore implements RhrHistoryStore {
-  private history: RhrNight[] = [];
+  private history: RhrNight[];
 
   constructor(seed: readonly RhrNight[] = []) {
     this.history = [...seed];

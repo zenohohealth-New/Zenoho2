@@ -32,7 +32,7 @@ import {
 } from './src/eligibility';
 import { getHealthStore, type PermissionOutcome } from './src/health';
 import { loadRhrHistory } from './src/health/rhrHistory';
-import { InMemoryRhrHistoryStore } from './src/storage/rhrStore';
+import { SqliteRhrHistoryStore } from './src/storage/sqliteRhrStore';
 
 /** Placeholder commitment for T-001: 23:00 to 06:30, 30-minute tolerance. */
 const TRIAL_COMMITMENT = {
@@ -41,11 +41,8 @@ const TRIAL_COMMITMENT = {
   toleranceMin: 30,
 } as const;
 
-/**
- * D-017 local RHR history. In-memory for now, so it resets with the app; the
- * durable store lands in T-002 (see src/storage/rhrStore.ts).
- */
-const rhrLocalStore = new InMemoryRhrHistoryStore();
+/** D-020: the durable on-device RHR history, so an L3 baseline can accumulate. */
+const rhrLocalStore = new SqliteRhrHistoryStore();
 
 interface Probe {
   available: boolean | null;
@@ -82,27 +79,23 @@ const EMPTY: Probe = {
 
 export default function App() {
   const [probe, setProbe] = useState<Probe>(EMPTY);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(true);
 
   const tzOffsetMin = useMemo(() => -new Date().getTimezoneOffset(), []);
 
-  const run = useCallback(async () => {
-    setBusy(true);
-    setProbe(EMPTY);
+  /**
+   * Runs the probe and returns what it found. Deliberately touches no state:
+   * the mount effect below must not call setState synchronously.
+   */
+  const probeOnce = useCallback(async (): Promise<Probe> => {
     try {
       const store = getHealthStore();
 
       const available = await store.isAvailable();
-      if (!available) {
-        setProbe({ ...EMPTY, available: false });
-        return;
-      }
+      if (!available) return { ...EMPTY, available: false };
 
       const permission = await store.requestReadPermissions();
-      if (permission !== 'GRANTED') {
-        setProbe({ ...EMPTY, available: true, permission });
-        return;
-      }
+      if (permission !== 'GRANTED') return { ...EMPTY, available: true, permission };
 
       const background = await store.hasBackgroundAccess();
       const now = Date.now();
@@ -141,7 +134,7 @@ export default function App() {
         now,
       );
 
-      setProbe({
+      return {
         available: true,
         permission,
         background,
@@ -154,17 +147,33 @@ export default function App() {
         rhrNights: rhr.history.length,
         rhrFallback: rhr.usedFallback,
         error: null,
-      });
+      };
     } catch (e) {
-      setProbe({ ...EMPTY, error: e instanceof Error ? e.message : String(e) });
-    } finally {
-      setBusy(false);
+      return { ...EMPTY, error: e instanceof Error ? e.message : String(e) };
     }
   }, [tzOffsetMin]);
 
   useEffect(() => {
-    void run();
-  }, [run]);
+    let cancelled = false;
+    void probeOnce().then((result) => {
+      if (cancelled) return;
+      setProbe(result);
+      setBusy(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [probeOnce]);
+
+  /** Button handler: a reset here is fine, it is not an effect body. */
+  const rerun = useCallback(() => {
+    setBusy(true);
+    setProbe(EMPTY);
+    void probeOnce().then((result) => {
+      setProbe(result);
+      setBusy(false);
+    });
+  }, [probeOnce]);
 
   const d = probe.derived?.night;
 
@@ -226,7 +235,7 @@ export default function App() {
           </View>
         )}
 
-        <Pressable style={styles.button} onPress={run} disabled={busy}>
+        <Pressable style={styles.button} onPress={rerun} disabled={busy}>
           <Text style={styles.buttonText}>{busy ? 'Reading…' : 'Read again'}</Text>
         </Pressable>
 
