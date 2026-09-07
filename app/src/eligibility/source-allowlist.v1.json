@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "specSection": "spec/ZENOHO2-V1-SPEC.md §9",
+  "generatedOn": "2026-09-07",
+  "note": [
+    "IDENTIFIER STRINGS BELOW ARE UNVERIFIED. Spec §9 names brands, not package ids.",
+    "Every entry has verified=false until the string is observed coming out of a real",
+    "device and recorded in a report (T-001 open item). An unverified-but-listed brand",
+    "still behaves as ALLOWED; the risk is a wrong string silently failing to match,",
+    "which degrades to UNKNOWN -> integrity UNVERIFIED, never to a false KEPT."
+  ],
+  "android": {
+    "allow": [
+      { "package": "com.sec.android.app.shealth", "brand": "Samsung Health", "verified": false, "evidence": "listed verbatim in spec §9" },
+      { "package": "com.garmin.android.apps.connectmobile", "brand": "Garmin Connect", "verified": false, "evidence": "D-014 device pair; string not yet observed in code" },
+      { "package": "com.fitbit.FitbitMobile", "brand": "Fitbit", "verified": false, "evidence": null },
+      { "package": "com.google.android.apps.fitness", "brand": "Google Fit", "verified": false, "evidence": null },
+      { "package": "com.huami.midong", "brand": "Zepp (Amazfit)", "verified": false, "evidence": null },
+      { "package": "com.xiaomi.wearable", "brand": "Mi Fitness", "verified": false, "evidence": null },
+      { "package": "com.ouraring.oura", "brand": "Oura", "verified": false, "evidence": null },
+      { "package": "com.whoop.android", "brand": "WHOOP", "verified": false, "evidence": null },
+      { "package": "fi.polar.polarflow", "brand": "Polar Flow", "verified": false, "evidence": null },
+      { "package": "com.withings.wiscale2", "brand": "Withings Health Mate", "verified": false, "evidence": null }
+    ],
+    "unverifiedBrand": [
+      { "package": "com.ultrahuman.app", "brand": "Ultrahuman", "verified": false, "evidence": "spec §9 marks Ultrahuman Android UNVERIFIED" }
+    ],
+    "block": [
+      { "package": "com.google.android.apps.healthdata", "brand": "Health Connect platform / manual entry", "reason": "PHONE_OS" }
+    ]
+  },
+  "ios": {
+    "allow": [
+      { "bundlePrefix": "com.apple.health", "brand": "Apple Watch", "verified": false, "evidence": "spec §9; see openQuestion below" },
+      { "bundlePrefix": "com.garmin.connect", "brand": "Garmin Connect", "verified": false, "evidence": null },
+      { "bundlePrefix": "com.huami.amazfit", "brand": "Zepp (Amazfit)", "verified": false, "evidence": null },
+      { "bundlePrefix": "com.xiaomi.mifit", "brand": "Mi Fitness", "verified": false, "evidence": null },
+      { "bundlePrefix": "com.ouraring", "brand": "Oura", "verified": false, "evidence": null },
+      { "bundlePrefix": "com.whoop", "brand": "WHOOP", "verified": false, "evidence": null },
+      { "bundlePrefix": "fi.polar", "brand": "Polar Flow", "verified": false, "evidence": null },
+      { "bundlePrefix": "com.withings", "brand": "Withings Health Mate", "verified": false, "evidence": null }
+    ],
+    "unverifiedBrand": [
+      { "bundlePrefix": "com.ultrahuman", "brand": "Ultrahuman", "verified": false, "evidence": "spec §9: iOS verified per D-003, string unconfirmed" },
+      { "bundlePrefix": "com.bitsync", "brand": "Fitbit-bridge apps", "verified": false, "evidence": "spec §9 flags bridge apps UNVERIFIED" }
+    ],
+    "block": []
+  },
+  "openQuestions": [
+    "iOS `com.apple.health` covers BOTH Apple Watch and iPhone-only sleep. The bundle id alone cannot separate them, so as written §9 would admit phone-only sleep on iOS and contradict D-003. Needs a decision before iOS ships.",
+    "Every identifier string above needs observation from a real device before beta."
+  ]
+}

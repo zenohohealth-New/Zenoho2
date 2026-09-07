@@ -1,0 +1,734 @@
+{
+  "version": 1,
+  "spec": "spec/ZENOHO2-V1-SPEC.md sections 4, 5, 9",
+  "notes": [
+    "All local times are IST (tzOffsetMin 330) unless a case says otherwise.",
+    "The hr field is a generator so coverage ratios can be stated exactly rather than",
+    "listing hundreds of samples. mode=none emits nothing. mode=cover emits a sample",
+    "every everyMin across [startIso,endIso). mode=buckets emits one sample in the",
+    "middle of each of the first bucketCount 30-minute buckets from startIso, which is",
+    "how a precise wear-presence ratio is produced.",
+    "kind=derive exercises deriveDailyState; kind=revision exercises applyRevision."
+  ],
+  "cases": [
+    {
+      "id": "AC2-01-kept-within-tolerance",
+      "ac": "AC-2",
+      "kind": "derive",
+      "description": "Bed +10 min, wake +5 min, both inside a 30-min tolerance.",
+      "platform": "android",
+      "input": {
+        "nightDate": "2026-09-07",
+        "tzOffsetMin": 330,
+        "commitment": {
+          "bedTargetMin": 1380,
+          "wakeTargetMin": 390,
+          "toleranceMin": 30
+        },
+        "sessions": [
+          {
+            "sourceId": "com.garmin.android.apps.connectmobile",
+            "startIso": "2026-09-06T17:40:00Z",
+            "endIso": "2026-09-07T01:05:00Z",
+            "recordingMethod": "AUTOMATIC"
+          }
+        ],
+        "hr": {
+          "mode": "cover",
+          "sourceId": "com.garmin.android.apps.connectmobile",
+          "startIso": "2026-09-06T17:40:00Z",
+          "endIso": "2026-09-07T01:05:00Z",
+          "everyMin": 10
+        }
+      },
+      "expected": {
+        "state": "KEPT",
+        "integrity": "OK",
+        "wearPresence": true,
+        "deviationMin": 10,
+        "sourceId": "com.garmin.android.apps.connectmobile"
+      }
+    },
+    {
+      "id": "AC2-02-missed-by-bed",
+      "ac": "AC-2",
+      "kind": "derive",
+      "description": "Asleep 00:05, 65 min past a 23:00 target. Wake is fine.",
+      "platform": "android",
+      "input": {
+        "nightDate": "2026-09-07",
+        "tzOffsetMin": 330,
+        "commitment": {
+          "bedTargetMin": 1380,
+          "wakeTargetMin": 390,
+          "toleranceMin": 30
+        },
+        "sessions": [
+          {
+            "sourceId": "com.garmin.android.apps.connectmobile",
+            "startIso": "2026-09-06T18:35:00Z",
+            "endIso": "2026-09-07T01:10:00Z",
+            "recordingMethod": "AUTOMATIC"
+          }
+        ],
+        "hr": {
+          "mode": "cover",
+          "sourceId": "com.garmin.android.apps.connectmobile",
+          "startIso": "2026-09-06T18:35:00Z",
+          "endIso": "2026-09-07T01:10:00Z",
+          "everyMin": 10
+        }
+      },
+      "expected": {
+        "state": "MISSED",
+        "integrity": "OK",
+        "wearPresence": true,
+        "deviationMin": 65,
+        "sourceId": "com.garmin.android.apps.connectmobile"
+      }
+    },
+    {
+      "id": "AC2-03-missed-by-wake",
+      "ac": "AC-2",
+      "kind": "derive",
+      "description": "Bed on time, woke 08:00 against a 06:30 target: 90 min over.",
+      "platform": "android",
+      "input": {
+        "nightDate": "2026-09-07",
+        "tzOffsetMin": 330,
+        "commitment": {
+          "bedTargetMin": 1380,
+          "wakeTargetMin": 390,
+          "toleranceMin": 30
+        },
+        "sessions": [
+          {
+            "sourceId": "com.garmin.android.apps.connectmobile",
+            "startIso": "2026-09-06T17:45:00Z",
+            "endIso": "2026-09-07T02:30:00Z",
+            "recordingMethod": "AUTOMATIC"
+          }
+        ],
+        "hr": {
+          "mode": "cover",
+          "sourceId": "com.garmin.android.apps.connectmobile",
+          "startIso": "2026-09-06T17:45:00Z",
+          "endIso": "2026-09-07T02:30:00Z",
+          "everyMin": 10
+        }
+      },
+      "expected": {
+        "state": "MISSED",
+        "integrity": "OK",
+        "wearPresence": true,
+        "deviationMin": 90,
+        "sourceId": "com.garmin.android.apps.connectmobile"
+      }
+    },
+    {
+      "id": "AC2-04-no-hr-is-no-data",
+      "ac": "AC-2",
+      "kind": "derive",
+      "description": "A perfectly timed session with zero HR fails wear presence (D-009 L2).",
+      "platform": "android",
+      "input": {
+        "nightDate": "2026-09-07",
+        "tzOffsetMin": 330,
+        "commitment": {
+          "bedTargetMin": 1380,
+          "wakeTargetMin": 390,
+          "toleranceMin": 30
+        },
+        "sessions": [
+          {
+            "sourceId": "com.garmin.android.apps.connectmobile",
+            "startIso": "2026-09-06T17:40:00Z",
+            "endIso": "2026-09-07T01:05:00Z",
+            "recordingMethod": "AUTOMATIC"
+          }
+        ],
+        "hr": {
+          "mode": "none"
+        }
+      },
+      "expected": {
+        "state": "NO_DATA",
+        "integrity": "NO_WEAR",
+        "wearPresence": false,
+        "deviationMin": null,
+        "sourceId": "com.garmin.android.apps.connectmobile"
+      }
+    },
+    {
+      "id": "AC2-05-manual-entry-is-no-data",
+      "ac": "AC-2",
+      "kind": "derive",
+      "description": "Hand-typed sleep from an allow-listed app is still rejected (D-009 L1).",
+      "platform": "android",
+      "input": {
+        "nightDate": "2026-09-07",
+        "tzOffsetMin": 330,
+        "commitment": {
+          "bedTargetMin": 1380,
+          "wakeTargetMin": 390,
+          "toleranceMin": 30
+        },
+        "sessions": [
+          {
+            "sourceId": "com.garmin.android.apps.connectmobile",
+            "startIso": "2026-09-06T17:40:00Z",
+            "endIso": "2026-09-07T01:05:00Z",
+            "recordingMethod": "MANUAL"
+          }
+        ],
+        "hr": {
+          "mode": "cover",
+          "sourceId": "com.garmin.android.apps.connectmobile",
+          "startIso": "2026-09-06T17:40:00Z",
+          "endIso": "2026-09-07T01:05:00Z",
+          "everyMin": 10
+        }
+      },
+      "expected": {
+        "state": "NO_DATA",
+        "integrity": "NO_SOURCE",
+        "wearPresence": false,
+        "deviationMin": null,
+        "sourceId": null
+      }
+    },
+    {
+      "id": "AC2-06-two-sessions-longest-wins",
+      "ac": "AC-2",
+      "kind": "derive",
+      "description": "A 1 h evening nap and the 7 h 25 m main sleep; the longer one is chosen.",
+      "platform": "android",
+      "input": {
+        "nightDate": "2026-09-07",
+        "tzOffsetMin": 330,
+        "commitment": {
+          "bedTargetMin": 1380,
+          "wakeTargetMin": 390,
+          "toleranceMin": 30
+        },
+        "sessions": [
+          {
+            "sourceId": "com.garmin.android.apps.connectmobile",
+            "startIso": "2026-09-06T13:30:00Z",
+            "endIso": "2026-09-06T14:30:00Z",
+            "recordingMethod": "AUTOMATIC"
+          },
+          {
+            "sourceId": "com.garmin.android.apps.connectmobile",
+            "startIso": "2026-09-06T17:40:00Z",
+            "endIso": "2026-09-07T01:05:00Z",
+            "recordingMethod": "AUTOMATIC"
+          }
+        ],
+        "hr": {
+          "mode": "cover",
+          "sourceId": "com.garmin.android.apps.connectmobile",
+          "startIso": "2026-09-06T13:30:00Z",
+          "endIso": "2026-09-07T01:05:00Z",
+          "everyMin": 10
+        }
+      },
+      "expected": {
+        "state": "KEPT",
+        "integrity": "OK",
+        "wearPresence": true,
+        "deviationMin": 10,
+        "sourceId": "com.garmin.android.apps.connectmobile"
+      }
+    },
+    {
+      "id": "AC2-07-timezone-jump-is-travel",
+      "ac": "AC-2",
+      "kind": "derive",
+      "description": "IST to EST is a 630-min shift, well past the 180-min threshold.",
+      "platform": "android",
+      "input": {
+        "nightDate": "2026-09-07",
+        "tzOffsetMin": -300,
+        "prevTzOffsetMin": 330,
+        "commitment": {
+          "bedTargetMin": 1380,
+          "wakeTargetMin": 390,
+          "toleranceMin": 30
+        },
+        "sessions": [
+          {
+            "sourceId": "com.garmin.android.apps.connectmobile",
+            "startIso": "2026-09-07T04:10:00Z",
+            "endIso": "2026-09-07T11:35:00Z",
+            "recordingMethod": "AUTOMATIC"
+          }
+        ],
+        "hr": {
+          "mode": "cover",
+          "sourceId": "com.garmin.android.apps.connectmobile",
+          "startIso": "2026-09-07T04:10:00Z",
+          "endIso": "2026-09-07T11:35:00Z",
+          "everyMin": 10
+        }
+      },
+      "expected": {
+        "state": "TRAVEL",
+        "integrity": "TRAVEL",
+        "wearPresence": false,
+        "deviationMin": null,
+        "sourceId": null
+      }
+    },
+    {
+      "id": "AC2-08a-late-sync-before-1400-revises",
+      "ac": "AC-2",
+      "kind": "revision",
+      "description": "A better read arriving 09:00 local replaces the stored row.",
+      "tzOffsetMin": 330,
+      "nowIso": "2026-09-07T03:30:00Z",
+      "existing": {
+        "nightDate": "2026-09-07",
+        "state": "NO_DATA",
+        "integrity": "NO_SOURCE",
+        "sourceId": null,
+        "wearPresence": false,
+        "deviationMin": null,
+        "frozen": false,
+        "revisionCount": 0
+      },
+      "fresh": {
+        "nightDate": "2026-09-07",
+        "state": "KEPT",
+        "integrity": "OK",
+        "sourceId": "com.garmin.android.apps.connectmobile",
+        "wearPresence": true,
+        "deviationMin": 10,
+        "frozen": false,
+        "revisionCount": 0
+      },
+      "expected": {
+        "state": "KEPT",
+        "integrity": "OK",
+        "frozen": false,
+        "revisionCount": 1
+      }
+    },
+    {
+      "id": "AC2-08b-late-sync-after-1400-does-not-revise",
+      "ac": "AC-2",
+      "kind": "revision",
+      "description": "The same read arriving 15:00 local is refused and the row freezes.",
+      "tzOffsetMin": 330,
+      "nowIso": "2026-09-07T09:30:00Z",
+      "existing": {
+        "nightDate": "2026-09-07",
+        "state": "NO_DATA",
+        "integrity": "NO_SOURCE",
+        "sourceId": null,
+        "wearPresence": false,
+        "deviationMin": null,
+        "frozen": false,
+        "revisionCount": 0
+      },
+      "fresh": {
+        "nightDate": "2026-09-07",
+        "state": "KEPT",
+        "integrity": "OK",
+        "sourceId": "com.garmin.android.apps.connectmobile",
+        "wearPresence": true,
+        "deviationMin": 10,
+        "frozen": false,
+        "revisionCount": 0
+      },
+      "expected": {
+        "state": "NO_DATA",
+        "integrity": "NO_SOURCE",
+        "frozen": true,
+        "revisionCount": 0
+      }
+    },
+    {
+      "id": "EXTRA-09-wear-presence-exactly-at-threshold",
+      "ac": "beyond AC-2",
+      "kind": "derive",
+      "description": "5 h session = 10 buckets, 7 covered = exactly 0.70; the threshold is inclusive.",
+      "platform": "android",
+      "input": {
+        "nightDate": "2026-09-07",
+        "tzOffsetMin": 330,
+        "commitment": {
+          "bedTargetMin": 1380,
+          "wakeTargetMin": 240,
+          "toleranceMin": 30
+        },
+        "sessions": [
+          {
+            "sourceId": "com.garmin.android.apps.connectmobile",
+            "startIso": "2026-09-06T17:40:00Z",
+            "endIso": "2026-09-06T22:40:00Z",
+            "recordingMethod": "AUTOMATIC"
+          }
+        ],
+        "hr": {
+          "mode": "buckets",
+          "sourceId": "com.garmin.android.apps.connectmobile",
+          "startIso": "2026-09-06T17:40:00Z",
+          "bucketCount": 7
+        }
+      },
+      "expected": {
+        "state": "KEPT",
+        "integrity": "OK",
+        "wearPresence": true,
+        "deviationMin": 10,
+        "sourceId": "com.garmin.android.apps.connectmobile"
+      }
+    },
+    {
+      "id": "EXTRA-10-wear-presence-just-below-threshold",
+      "ac": "beyond AC-2",
+      "kind": "derive",
+      "description": "Same session, 6 of 10 buckets = 0.60; one bucket short flips it to NO_DATA.",
+      "platform": "android",
+      "input": {
+        "nightDate": "2026-09-07",
+        "tzOffsetMin": 330,
+        "commitment": {
+          "bedTargetMin": 1380,
+          "wakeTargetMin": 240,
+          "toleranceMin": 30
+        },
+        "sessions": [
+          {
+            "sourceId": "com.garmin.android.apps.connectmobile",
+            "startIso": "2026-09-06T17:40:00Z",
+            "endIso": "2026-09-06T22:40:00Z",
+            "recordingMethod": "AUTOMATIC"
+          }
+        ],
+        "hr": {
+          "mode": "buckets",
+          "sourceId": "com.garmin.android.apps.connectmobile",
+          "startIso": "2026-09-06T17:40:00Z",
+          "bucketCount": 6
+        }
+      },
+      "expected": {
+        "state": "NO_DATA",
+        "integrity": "NO_WEAR",
+        "wearPresence": false,
+        "deviationMin": null,
+        "sourceId": "com.garmin.android.apps.connectmobile"
+      }
+    },
+    {
+      "id": "EXTRA-11-midnight-wrap-bed-target",
+      "ac": "beyond AC-2",
+      "kind": "derive",
+      "description": "Bed target 00:15, asleep 23:50: a 25-min miss, not a 1415-min one.",
+      "platform": "android",
+      "input": {
+        "nightDate": "2026-09-07",
+        "tzOffsetMin": 330,
+        "commitment": {
+          "bedTargetMin": 15,
+          "wakeTargetMin": 420,
+          "toleranceMin": 30
+        },
+        "sessions": [
+          {
+            "sourceId": "com.garmin.android.apps.connectmobile",
+            "startIso": "2026-09-06T18:20:00Z",
+            "endIso": "2026-09-07T01:35:00Z",
+            "recordingMethod": "AUTOMATIC"
+          }
+        ],
+        "hr": {
+          "mode": "cover",
+          "sourceId": "com.garmin.android.apps.connectmobile",
+          "startIso": "2026-09-06T18:20:00Z",
+          "endIso": "2026-09-07T01:35:00Z",
+          "everyMin": 10
+        }
+      },
+      "expected": {
+        "state": "KEPT",
+        "integrity": "OK",
+        "wearPresence": true,
+        "deviationMin": 25,
+        "sourceId": "com.garmin.android.apps.connectmobile"
+      }
+    },
+    {
+      "id": "EXTRA-12-unknown-origin-with-hr-is-unverified",
+      "ac": "beyond AC-2",
+      "kind": "derive",
+      "description": "Spec section 9: an unlisted brand with HR still counts, but is flagged UNVERIFIED.",
+      "platform": "android",
+      "input": {
+        "nightDate": "2026-09-07",
+        "tzOffsetMin": 330,
+        "commitment": {
+          "bedTargetMin": 1380,
+          "wakeTargetMin": 390,
+          "toleranceMin": 30
+        },
+        "sessions": [
+          {
+            "sourceId": "com.newbrand.watchapp",
+            "startIso": "2026-09-06T17:40:00Z",
+            "endIso": "2026-09-07T01:05:00Z",
+            "recordingMethod": "AUTOMATIC"
+          }
+        ],
+        "hr": {
+          "mode": "cover",
+          "sourceId": "com.newbrand.watchapp",
+          "startIso": "2026-09-06T17:40:00Z",
+          "endIso": "2026-09-07T01:05:00Z",
+          "everyMin": 10
+        }
+      },
+      "expected": {
+        "state": "KEPT",
+        "integrity": "UNVERIFIED",
+        "wearPresence": true,
+        "deviationMin": 10,
+        "sourceId": "com.newbrand.watchapp"
+      }
+    },
+    {
+      "id": "EXTRA-13-phone-os-origin-is-blocked",
+      "ac": "beyond AC-2",
+      "kind": "derive",
+      "description": "D-003: sleep written by the Health Connect platform itself is not a wearable.",
+      "platform": "android",
+      "input": {
+        "nightDate": "2026-09-07",
+        "tzOffsetMin": 330,
+        "commitment": {
+          "bedTargetMin": 1380,
+          "wakeTargetMin": 390,
+          "toleranceMin": 30
+        },
+        "sessions": [
+          {
+            "sourceId": "com.google.android.apps.healthdata",
+            "startIso": "2026-09-06T17:40:00Z",
+            "endIso": "2026-09-07T01:05:00Z",
+            "recordingMethod": "AUTOMATIC"
+          }
+        ],
+        "hr": {
+          "mode": "cover",
+          "sourceId": "com.google.android.apps.healthdata",
+          "startIso": "2026-09-06T17:40:00Z",
+          "endIso": "2026-09-07T01:05:00Z",
+          "everyMin": 10
+        }
+      },
+      "expected": {
+        "state": "NO_DATA",
+        "integrity": "NO_SOURCE",
+        "wearPresence": false,
+        "deviationMin": null,
+        "sourceId": null
+      }
+    },
+    {
+      "id": "EXTRA-14-rhr-drift-flags-unverified",
+      "ac": "beyond AC-2",
+      "kind": "derive",
+      "description": "7-day median 75 bpm against a 30-day baseline of 55: a 20 bpm drift (D-009 L3).",
+      "platform": "android",
+      "input": {
+        "nightDate": "2026-09-07",
+        "tzOffsetMin": 330,
+        "commitment": {
+          "bedTargetMin": 1380,
+          "wakeTargetMin": 390,
+          "toleranceMin": 30
+        },
+        "sessions": [
+          {
+            "sourceId": "com.garmin.android.apps.connectmobile",
+            "startIso": "2026-09-06T17:40:00Z",
+            "endIso": "2026-09-07T01:05:00Z",
+            "recordingMethod": "AUTOMATIC"
+          }
+        ],
+        "hr": {
+          "mode": "cover",
+          "sourceId": "com.garmin.android.apps.connectmobile",
+          "startIso": "2026-09-06T17:40:00Z",
+          "endIso": "2026-09-07T01:05:00Z",
+          "everyMin": 10
+        },
+        "rhrHistory": {
+          "mode": "generate",
+          "endBefore": "2026-09-07",
+          "nights": 30,
+          "baselineBpm": 55,
+          "recentNights": 7,
+          "recentBpm": 75
+        }
+      },
+      "expected": {
+        "state": "KEPT",
+        "integrity": "UNVERIFIED",
+        "wearPresence": true,
+        "deviationMin": 10,
+        "sourceId": "com.garmin.android.apps.connectmobile"
+      }
+    },
+    {
+      "id": "EXTRA-15-session-starting-before-1800-is-outside-window",
+      "ac": "beyond AC-2",
+      "kind": "derive",
+      "description": "Spec section 4: the start window opens at 18:00; a 17:00 start is not a main sleep.",
+      "platform": "android",
+      "input": {
+        "nightDate": "2026-09-07",
+        "tzOffsetMin": 330,
+        "commitment": {
+          "bedTargetMin": 1380,
+          "wakeTargetMin": 390,
+          "toleranceMin": 30
+        },
+        "sessions": [
+          {
+            "sourceId": "com.garmin.android.apps.connectmobile",
+            "startIso": "2026-09-06T11:30:00Z",
+            "endIso": "2026-09-07T01:05:00Z",
+            "recordingMethod": "AUTOMATIC"
+          }
+        ],
+        "hr": {
+          "mode": "cover",
+          "sourceId": "com.garmin.android.apps.connectmobile",
+          "startIso": "2026-09-06T11:30:00Z",
+          "endIso": "2026-09-07T01:05:00Z",
+          "everyMin": 10
+        }
+      },
+      "expected": {
+        "state": "NO_DATA",
+        "integrity": "NO_SOURCE",
+        "wearPresence": false,
+        "deviationMin": null,
+        "sourceId": null
+      }
+    },
+    {
+      "id": "EXTRA-16-deviation-rounds-to-nearest-five",
+      "ac": "beyond AC-2",
+      "kind": "derive",
+      "description": "A 63-min bed deviation is stored as 65, not 63 (spec section 5 rounding).",
+      "platform": "android",
+      "input": {
+        "nightDate": "2026-09-07",
+        "tzOffsetMin": 330,
+        "commitment": {
+          "bedTargetMin": 1380,
+          "wakeTargetMin": 390,
+          "toleranceMin": 30
+        },
+        "sessions": [
+          {
+            "sourceId": "com.garmin.android.apps.connectmobile",
+            "startIso": "2026-09-06T18:33:00Z",
+            "endIso": "2026-09-07T01:05:00Z",
+            "recordingMethod": "AUTOMATIC"
+          }
+        ],
+        "hr": {
+          "mode": "cover",
+          "sourceId": "com.garmin.android.apps.connectmobile",
+          "startIso": "2026-09-06T18:33:00Z",
+          "endIso": "2026-09-07T01:05:00Z",
+          "everyMin": 10
+        }
+      },
+      "expected": {
+        "state": "MISSED",
+        "integrity": "OK",
+        "wearPresence": true,
+        "deviationMin": 65,
+        "sourceId": "com.garmin.android.apps.connectmobile"
+      }
+    },
+    {
+      "id": "EXTRA-17-deviation-exactly-at-tolerance-is-kept",
+      "ac": "beyond AC-2",
+      "kind": "derive",
+      "description": "Bed +30 and wake -30 against a 30-min tolerance: spec 5 uses <=, so KEPT.",
+      "platform": "android",
+      "input": {
+        "nightDate": "2026-09-07",
+        "tzOffsetMin": 330,
+        "commitment": {
+          "bedTargetMin": 1380,
+          "wakeTargetMin": 390,
+          "toleranceMin": 30
+        },
+        "sessions": [
+          {
+            "sourceId": "com.garmin.android.apps.connectmobile",
+            "startIso": "2026-09-06T18:00:00Z",
+            "endIso": "2026-09-07T00:30:00Z",
+            "recordingMethod": "AUTOMATIC"
+          }
+        ],
+        "hr": {
+          "mode": "cover",
+          "sourceId": "com.garmin.android.apps.connectmobile",
+          "startIso": "2026-09-06T18:00:00Z",
+          "endIso": "2026-09-07T00:30:00Z",
+          "everyMin": 10
+        }
+      },
+      "expected": {
+        "state": "KEPT",
+        "integrity": "OK",
+        "wearPresence": true,
+        "deviationMin": 30,
+        "sourceId": "com.garmin.android.apps.connectmobile"
+      }
+    },
+    {
+      "id": "EXTRA-18-second-revision-is-refused",
+      "ac": "beyond AC-2",
+      "kind": "revision",
+      "description": "Spec 5 allows one revision; a row already revised once is immutable.",
+      "tzOffsetMin": 330,
+      "nowIso": "2026-09-07T03:30:00Z",
+      "existing": {
+        "nightDate": "2026-09-07",
+        "state": "NO_DATA",
+        "integrity": "NO_SOURCE",
+        "sourceId": null,
+        "wearPresence": false,
+        "deviationMin": null,
+        "frozen": false,
+        "revisionCount": 1
+      },
+      "fresh": {
+        "nightDate": "2026-09-07",
+        "state": "KEPT",
+        "integrity": "OK",
+        "sourceId": "com.garmin.android.apps.connectmobile",
+        "wearPresence": true,
+        "deviationMin": 10,
+        "frozen": false,
+        "revisionCount": 0
+      },
+      "expected": {
+        "state": "NO_DATA",
+        "integrity": "NO_SOURCE",
+        "frozen": false,
+        "revisionCount": 1
+      }
+    }
+  ]
+}

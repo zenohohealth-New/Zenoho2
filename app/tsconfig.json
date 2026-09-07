@@ -1,6 +1,25 @@
 {
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
-    "strict": true
-  }
+    "strict": true,
+    "resolveJsonModule": true,
+    "paths": {
+      "vitest": [
+        "./node_modules/vitest"
+      ],
+      "vitest/*": [
+        "./node_modules/vitest/*"
+      ]
+    }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    "expo-env.d.ts",
+    ".expo/types/**/*.ts",
+    "../tests/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
 }
