@@ -186,6 +186,80 @@ flagged as never-executed, and it starts accumulating nights immediately — the
 baseline needs 14 before it can say anything at all.
 Status: DECIDED
 
+## D-025 · 2026-09-07 · New users start empty; first 14 nights are baseline-building
+A new user has no history: Health Connect holds recent data only, and it holds nothing at all
+from before they started wearing the device. Observed on the founder's own device — 30 rows
+backfilled, only 6 nights (2–7 Sep) carried data, matching the day he began wearing the
+Vívoactive 5.
+Consequences that must be designed for, not patched later:
+- Onboarding must frame the first 14 nights as building a record, never as failure.
+- D-009 L3 integrity flags stay suppressed until ≥14 baseline nights exist (spec §5 already
+  requires ≥14; this makes the UI consequence explicit).
+- Streaks and lifetime counts start at zero for everyone. A pod cannot compare "history".
+- A user who joins a pod on day 1 has no baseline; the pod's first cycle is therefore also
+  everyone's baseline period.
+Status: DECIDED
+
+## D-026 · 2026-09-07 · Commitment realism is a product problem, not a user problem
+Founder set 23:00 / 07:00 / ±30. All six nights with data derived MISSED; real sleep onset was
+23:34–23:46. A promise broken every night teaches nothing, and inside a pod it would be
+humiliating rather than motivating — which would attack the core thesis (D-001) directly.
+Design consequence for the commitment screen (T-004 or earlier):
+- When ≥7 nights of history exist, show the user their actual median bed/wake time while they
+  are choosing, and warn when the chosen target sits far outside it.
+- Do not auto-set the target. Suggest, never impose.
+- Revisit tolerance defaults once real distributions exist across more than one person.
+Status: DECIDED (implementation deferred; recorded now so it is not lost)
+
+## D-027 · 2026-09-07 · Phone is a pipe, not a sensor — restated after founder question
+Zenoho2 never reads phone sensors. The chain is wearable → vendor app → Health Connect /
+HealthKit → Zenoho2. This restates D-003 because the distinction was not obvious in use: the
+app looks like it is reading the phone, and it is not. Any user-facing copy must make this
+explicit, because a user who thinks the phone is measuring will not understand "no data".
+Status: DECIDED
+
+## D-028 · 2026-09-07 · Manifest-permission diff test
+A test compares intended permissions against the generated AndroidManifest and fails on
+divergence. Approved after three permission-related device failures in one day, each invisible
+to tests, typecheck and prebuild.
+Status: DECIDED (implemented in T-002)
+
+---
+
+## FINDINGS LOG — 2026-09-07 (evidence, not decisions)
+
+### Device pipeline (S26 Ultra, Android 16 / One UI 8.5, Garmin Vívoactive 5)
+- Garmin Connect Android dataOrigin: `com.garmin.android.apps.connectmobile` — verified.
+- Garmin writes SleepSession, HeartRate AND RestingHeartRate to Health Connect.
+- Health Connect background read available and granted on Android 16.
+- Health Connect page cap is 1000 records, oldest-first; unpaginated wide reads silently
+  truncate. Fixed by scoping HR reads to the selected session plus pagination.
+- `READ_RESTING_HEART_RATE` is a separate permission from heart rate ("Vitals" in the consent
+  sheet grants HR, not RHR).
+- Real night observed: sleep 23:46 → 08:00, 963 HR samples, wear ratio 100%.
+
+### Integration failure pattern (three failures, one day)
+All three were invisible to a green suite, a clean typecheck and a successful prebuild:
+1. Undeclared manifest permission (run 1).
+2. Platform paging default (run 2).
+3. A failed read returning an empty array would have been persisted as a genuine NO_DATA night
+   — caught in review, not by tests. `readNight` now returns `readErrors`.
+Implication carried forward: no acceptance criterion involving the platform may be marked met
+without a device run. Applies to every task from here.
+
+### Still never executed on device
+- iOS bridge, in whole (D-013).
+- Nothing else as of R-002 device run — the D-020 SQLite write path executed 2026-09-07 via the
+  forced-fallback acceptance tool (RHR nights 1, fallback yes).
+
+### Distribution facts (2026-09-07)
+- Sideloaded APKs get full Health Connect permissions; the Play declaration is a publishing
+  requirement, not a permission requirement. Proven by the preview build.
+- Google developer-identity verification for sideloaded apps is rolling out through
+  September 2026. Treat sideloading as workable-now, not guaranteed-for-a-year. UNVERIFIED
+  for India timing.
+- iOS has no equivalent: TestFlight or ad-hoc only, both requiring the paid Apple account.
+
 ---
 
 ## OPEN ITEMS (blocked on a device, not on a person)
