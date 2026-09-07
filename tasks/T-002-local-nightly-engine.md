@@ -1,6 +1,10 @@
 # T-002 · Local nightly engine (no backend)
 
-Status: READY · Owner: Claude Code (maker) · Reviewer: Claude Web (checker)
+Status: IN_REVIEW · Owner: Claude Code (maker) · Reviewer: Claude Web (checker)
+Report: reports/R-002-local-engine.md (2026-09-07). Engine built; 99 tests, typecheck and
+lint clean. NOT device-verified: AC-2.1, AC-2.2, AC-2.4, AC-2.7 are open and AC-2.3, AC-2.5,
+AC-2.6 are half-met (test yes, device no). Preview APK built per D-023. Only the checker
+marks this DONE.
 Spec: spec/ZENOHO2-V1-SPEC.md §4, §5, §6 (commitment only), §10 (morning push only), §11 (screens 4 and 6 in local form), §12
 Decisions: D-002, D-003, D-006, D-009, D-010, D-012, D-016, D-017, D-019, D-020, D-022, D-023
 Supersedes the earlier plan to do the backend second. Backend is now T-003.
