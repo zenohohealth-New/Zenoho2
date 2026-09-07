@@ -9,7 +9,8 @@ Date: 2026-09-07
 > typecheck clean, lint clean. **Nine of the ten acceptance criteria cannot be signed off from
 > this machine**, because they are device facts: AC-2.1 through AC-2.7 all say "on device" or
 > "prove by restart". The preview APK (D-023) is built; §9 stays open until it has been run.
-> Two real bugs were found and fixed on the way, both in code T-001 shipped as green.
+> Two real bugs were found and fixed on the way, both in code T-001 shipped as green — and
+> §12 adds the approved guard that would have caught them, verified by reproducing each.
 
 ---
 
@@ -62,6 +63,9 @@ app/src/ui/HistoryScreen.tsx         spec §11 screen 6, local form
 app/src/ui/HarnessScreen.tsx         T-001 harness (D-022) + acceptance tools
 tests/engine.test.ts                 engine behaviour incl. AC-2.2, AC-2.3, AC-2.5
 tests/no-network.test.ts             AC-2.6, static half
+app/src/platform/androidPermissions.ts  the permission contract (§12)
+tests/manifest-permissions.test.ts   permission guard, layer 1 (§12)
+app/scripts/check-manifest.mjs       permission guard, layer 2 (§12)
 reports/R-002-local-engine.md        this file
 ```
 
@@ -91,15 +95,17 @@ tasks/T-001-foundation.md    DONE (approved by checker)
 
 | Gate | Command | Result |
 |---|---|---|
-| Unit + fixtures | `npm test` | **99/99 passed**, 8 files |
+| Unit + fixtures | `npm test` | **105 passed, 2 skipped**, 9 files |
 | Typecheck | `npm run typecheck` | **clean** |
 | Lint | `npm run lint` | **clean**, 0 errors 0 warnings |
-| Native config | `npx expo prebuild --platform android --clean` | **succeeded**; manifest inspected |
+| Native config | `npm run check:manifest` | **passed**; all 6 required permissions present, no write permission (see §12) |
 | Preview APK | `eas build --profile preview --platform android` | built (D-023) |
 | Device run | — | **NOT YET RUN** — see §9 |
 
-New coverage this task: 15 tests across `engine.test.ts` and `no-network.test.ts`, plus two
-regression cases for the freeze bug in `derive.test.ts`.
+New coverage this task: 21 tests across `engine.test.ts`, `no-network.test.ts` and
+`manifest-permissions.test.ts`, plus two regression cases for the freeze bug in
+`derive.test.ts`. The 2 skipped are Layer 2's manifest assertions, which run only when a
+generated manifest is present — `npm run check:manifest` generates one and checks it properly.
 
 ### On the AC-2.6 network test
 
@@ -115,7 +121,9 @@ is tested, but T-002 contains no path that reaches it.
 
 ## 4. Tests passed / failed
 
-**Passed: 99. Failed: 0.** Nothing skipped, `.only`'d or marked todo.
+**Passed: 105. Failed: 0. Skipped: 2**, both Layer 2 manifest assertions that require a
+generated manifest; `npm run check:manifest` covers them and passes. Nothing is `.only`'d or
+marked todo.
 
 One test failed while I was writing it and the failure was mine, not the code's: I had assumed
 `backfill(5)` would include today. It does not, by design. I corrected the expectation and
@@ -134,14 +142,30 @@ where the two readings coincide. Backfill is made entirely of past nights, so it
 immediately. Fixed with `freezeAtMs(nightDate, tz)`, anchored to the night; two regression
 tests, one of which fails against the old logic.
 
-**`POST_NOTIFICATIONS` was missing from the manifest.** `expo install expo-notifications` adds
-the package but does not register its config plugin, so the permission never reached the
-manifest. Android 13+ requires it and the test device runs Android 16 — the morning trigger
-would have failed silently on the very device it was built for. Caught by inspecting the
-generated manifest rather than by any test. This is the third manifest-permission problem in
-two tasks (`READ_RESTING_HEART_RATE` was the first two runs' failure), which is a pattern worth
-naming: **`expo install` adding a package is not the same as the permission existing**, and
-nothing in the local toolchain checks the difference.
+**`POST_NOTIFICATIONS` was missing from the manifest.** The package was installed and used,
+but the permission was never added to `expo.android.permissions`. Android 13+ requires it and
+the test device runs Android 16 — the morning trigger would have failed silently on the very
+device it was built for. Caught by inspecting the generated manifest, not by any test.
+
+**Correction to my first account of this.** I originally wrote that the cause was `expo install`
+failing to register the config plugin. Building the guard forced me to measure it, and that was
+wrong. Prebuilding under each combination shows:
+
+| app.json permission | plugin registered | in manifest |
+|---|---|---|
+| yes | yes | yes |
+| yes | no | **yes** |
+| no | yes | **no** |
+| no | no | no |
+
+So `expo.android.permissions` is the mechanism, and the `expo-notifications` config plugin does
+not contribute this permission at all — it handles notification icon, colour and sounds. I fixed
+both at once and attributed the fix to the wrong half. Registering the plugin is still right for
+its own reasons; declaring the permission is what mattered. The guard is built around the
+measured behaviour rather than my original assumption.
+
+This was the third manifest-permission problem in two tasks (`READ_RESTING_HEART_RATE` cost two
+device runs), which is what §12 now guards.
 
 ---
 
@@ -264,10 +288,54 @@ acceptance criteria are device facts and are therefore **open**:
    leave it overnight for the morning notification (AC-2.7).
 2. **Report back the numbers, not a verdict** — row counts before and after, the state
    distribution, and anything the harness printed. I will fill §9 from those.
-3. **T-003 (backend, schema, RLS)** — the checker writes that spec. Three things from T-002
+3. **Run `npm run check:manifest`** whenever app.json, a config plugin or a native dependency
+   changes, and before any build. It is deliberately outside `npm test` because it prebuilds.
+4. **T-003 (backend, schema, RLS)** — the checker writes that spec. Three things from T-002
    should feed into it: the sync path must treat a non-empty `readErrors` as unknown and never
    persist a failed read as NO_DATA; `daily_states` wants a timezone-offset column so D-016 can
    fire in the field (§8); and a manifest-permission check would have caught three bugs by now.
 
 Status set to **IN_REVIEW**, not DONE. Per CLAUDE.md the checker marks DONE, and with §9 open
 this is not a task anyone should be marking done yet.
+
+---
+
+## 12. The manifest permission guard
+
+Approved after the first draft of this report, and built as part of T-002.
+
+Three permission bugs in two tasks all had one shape: **the code needed a permission the
+manifest did not have**, and nothing checked the gap. So the guard derives the requirement from
+the code rather than restating the manifest.
+
+`app/src/platform/androidPermissions.ts` holds the mapping — Health Connect record type →
+Android permission, and module → permission — and is the single place a new requirement is
+declared.
+
+**Layer 1** (`tests/manifest-permissions.test.ts`, runs in `npm test`, milliseconds):
+
+- every permission the app requires is declared in `app.json`;
+- every record type the bridge actually asks for maps to a declared permission — this is the
+  literal shape of the `READ_RESTING_HEART_RATE` bug, caught by parsing the bridge's own
+  permission list rather than trusting a duplicate of it;
+- every module that needs a permission has both the permission declared and its config plugin
+  registered;
+- no health *write* permission is ever declared (D-010: Zenoho only reads);
+- the requirement list is non-empty, so a passing run cannot mean "found nothing to check".
+
+**Layer 2** (`npm run check:manifest`): prebuilds for real, diffs the generated
+`AndroidManifest.xml` against both the declared and the required sets, fails non-zero with the
+missing entries named, and restores the tree afterwards. Kept out of `npm test` because it runs
+`expo prebuild`.
+
+**Both layers were verified by reproducing the original bugs**, not by assuming:
+
+| Reproduction | Result |
+|---|---|
+| Remove `READ_RESTING_HEART_RATE` from app.json | Layer 1 fails, 2 tests, naming the record type and the missing permission |
+| Unregister `expo-notifications` and drop `POST_NOTIFICATIONS` | Layer 1 fails, 2 tests, naming both problems |
+| Drop `POST_NOTIFICATIONS`, keep everything else | Layer 2 fails: `MISSING from manifest: android.permission.POST_NOTIFICATIONS` |
+| Everything correct | Both layers pass; Layer 2 lists all 6 required permissions present |
+
+A test that has never been seen to fail is a guess, and one of these runs is what corrected the
+causal claim in §5.
