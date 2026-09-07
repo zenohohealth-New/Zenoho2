@@ -73,3 +73,6 @@ Thumbs.db
 .cache/
 .eslintcache
 .turbo/
+
+# --- Handoff files (D-029): local only, never committed to a public repo ---
+HANDOFF-*.md

@@ -155,12 +155,14 @@ can never accumulate. One store rather than several keeps the purge auditable in
 D-010 unchanged: nothing in this database is ever uploaded.
 Status: DECIDED
 
-## D-021 · (no decision recorded)
-The checker's post-R-001 rulings jumped from D-020 to D-022, leaving this id unused.
-Flagged rather than assumed deliberate: the last such gap (D-015) turned out to be a real
-decision taken in chat and never written down. If D-021 was decided somewhere, record it here;
-otherwise leave the number retired and do not reuse it.
-Status: OPEN (clerical)
+## D-021 · 2026-09-07 · Buy both store accounts
+Google Play Console (₹2,000 one-time) and Apple Developer Program (~₹9,000/yr), purchased
+08 Sep 2026. Rationale: sideloading works for Android today but Google's developer-identity
+verification for sideloaded apps rolls out through September 2026, and iOS has no sideload path
+at all — TestFlight requires the paid account. Buying both removes every distribution
+constraint and starts the Health Connect declaration clock (~7 days approval + 5–7 business
+days propagation).
+Status: DECIDED
 
 ## D-022 · 2026-09-07 · Brand verification is evidence-gated
 No wearable brand is marked verified until its source string AND a non-zero wear ratio are
@@ -223,6 +225,14 @@ A test compares intended permissions against the generated AndroidManifest and f
 divergence. Approved after three permission-related device failures in one day, each invisible
 to tests, typecheck and prebuild.
 Status: DECIDED (implemented in T-002)
+
+## D-029 · 2026-09-07 · Handoff files stay local, never committed
+Handoff files stay local, never committed; the repo is public so the checker can clone it, and
+personal/operational inventory must not be in it.
+Enforced by `HANDOFF-*.md` in .gitignore. What such a file carries — founder name, account
+names, planned spend, token names and expiries, strategic risk list — is an inventory of the
+setup, not a secret in itself, but a public repo is the wrong place for it.
+Status: DECIDED
 
 ---
 
