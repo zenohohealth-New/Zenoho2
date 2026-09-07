@@ -3,7 +3,13 @@
  * no clock of its own. Everything it needs arrives in `DeriveInput` (D-010: this
  * is the only place raw health values are ever touched, and they stay here).
  */
-import { circularDiffMin, localMinuteOfDay, roundTo5 } from './time';
+import {
+  circularDiffMin,
+  localMidnightMs,
+  localMinuteOfDay,
+  MIN_MS,
+  roundTo5,
+} from './time';
 import { selectMainSession } from './session';
 import { wearPresence } from './wear';
 import { rhrCoherence } from './rhr';
@@ -27,6 +33,18 @@ export const TRAVEL_TZ_SHIFT_MIN = 180;
 
 /** Spec §5: a state may be revised until 14:00 local, then it freezes. */
 export const FREEZE_LOCAL_MINUTE = 14 * 60;
+
+/**
+ * The instant a night's state freezes: 14:00 local ON THAT NIGHT'S DATE.
+ *
+ * This has to be anchored to the night, not to the current time of day. Reading
+ * only the clock would leave a night from last week revisable every morning and
+ * frozen every afternoon, which is not what §5 says — and backfill (T-002) is
+ * made entirely of such nights.
+ */
+export function freezeAtMs(nightDate: string, tzOffsetMin: number): number {
+  return localMidnightMs(nightDate, tzOffsetMin) + FREEZE_LOCAL_MINUTE * MIN_MS;
+}
 
 /** Spec §5: 3 consecutive NO_DATA nights prompt the member to check their device. */
 export const NO_DATA_PROMPT_RUN = 3;
@@ -158,7 +176,7 @@ export function applyRevision(
   nowMs: number,
   tzOffsetMin: number,
 ): DerivedNight {
-  const pastFreeze = localMinuteOfDay(nowMs, tzOffsetMin) >= FREEZE_LOCAL_MINUTE;
+  const pastFreeze = nowMs >= freezeAtMs(existing.nightDate, tzOffsetMin);
 
   if (existing.frozen || existing.revisionCount >= 1) {
     return { ...existing, frozen: existing.frozen || pastFreeze };

@@ -8,6 +8,7 @@ import {
   circularDiffMin,
   cycleStreak,
   deriveDailyState,
+  freezeAtMs,
   localMinuteOfDay,
   parseHhMm,
   roundTo5,
@@ -65,6 +66,26 @@ describe('applyRevision — fixture cases', () => {
       expect(kept.revisionCount).toBe(c.expected.revisionCount);
     });
   }
+
+  it('a past night is frozen regardless of the current time of day', () => {
+    // Regression: freezing used to key off now's time-of-day only, so a night from
+    // last week was revisable every morning and frozen every afternoon. Backfill
+    // (T-002) is made entirely of past nights, so this had to be night-anchored.
+    const old = { ...revisionCases[0].existing, nightDate: '2026-08-20' };
+    const kept = applyRevision(
+      old,
+      { ...revisionCases[0].fresh, nightDate: '2026-08-20' },
+      Date.parse('2026-09-07T03:30:00Z'), // 09:00 IST today, well before 14:00
+      330,
+    );
+    expect(kept.state).toBe(old.state);
+    expect(kept.frozen).toBe(true);
+  });
+
+  it('freezeAtMs lands on 14:00 local of the night date', () => {
+    // 14:00 IST on 2026-09-07 is 08:30Z.
+    expect(freezeAtMs('2026-09-07', 330)).toBe(Date.parse('2026-09-07T08:30:00Z'));
+  });
 
   it('a frozen row is never replaced, even before 14:00', () => {
     const frozen = { ...revisionCases[0].existing, frozen: true };

@@ -1,381 +1,237 @@
 /**
- * T-001 device harness — not a product screen.
+ * T-002 — the local nightly engine, as an app.
  *
- * Its only job is to produce the evidence R-001 has to report: that the health
- * bridge really reads from Health Connect on a physical device, what the real
- * dataOrigin strings are (a T-001 open item), and what the derivation makes of
- * last night. Pod, witness and cycle UI arrive in later tasks.
+ * No server, no account, no network. On open it loads the commitment from SQLite,
+ * derives last night, and shows the history. First run backfills the last 30
+ * nights so there is something to look at immediately.
  *
- * Copy rule (spec §11): nothing here states a health benefit.
+ * Copy rule (spec §11) applies to every string reachable from here.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 
-import {
-  deriveDailyState,
-  localDateKey,
-  localMinuteOfDay,
-  selectMainSession,
-  type DeriveResult,
-} from './src/derive';
-import {
-  checkEligibility,
-  NO_WEARABLE_COPY,
-  type EligibilityResult,
-} from './src/eligibility';
-import {
-  getHealthStore,
-  type PermissionOutcome,
-  type ReadIssue,
-} from './src/health';
-import { loadRhrHistory } from './src/health/rhrHistory';
+import { localDateKey } from './src/derive';
+import type { Commitment, DerivedNight } from './src/derive/types';
+import { DEFAULT_TOLERANCE_MIN } from './src/derive/types';
+import { getHealthStore } from './src/health';
 import { SqliteRhrHistoryStore } from './src/storage/sqliteRhrStore';
+import {
+  loadCommitment,
+  saveCommitment,
+  type StoredCommitment,
+} from './src/storage/commitmentStore';
+import { countNights } from './src/storage/dailyStateStore';
+import {
+  backfill,
+  deriveAndStoreNight,
+  summariseHistory,
+} from './src/engine/nightlyEngine';
+import {
+  requestNotificationPermission,
+  scheduleMorningSync,
+} from './src/engine/morningSync';
+import { CommitmentScreen } from './src/ui/CommitmentScreen';
+import { HistoryScreen } from './src/ui/HistoryScreen';
+import { HarnessScreen } from './src/ui/HarnessScreen';
+import { colors, t } from './src/ui/theme';
 
-/** Placeholder commitment for T-001: 23:00 to 06:30, 30-minute tolerance. */
-const TRIAL_COMMITMENT = {
+/** Spec §4 default tolerance. The times are a starting point, not advice. */
+const STARTING_COMMITMENT: Commitment = {
   bedTargetMin: 23 * 60,
-  wakeTargetMin: 6 * 60 + 30,
-  toleranceMin: 30,
-} as const;
-
-/** D-020: the durable on-device RHR history, so an L3 baseline can accumulate. */
-const rhrLocalStore = new SqliteRhrHistoryStore();
-
-interface Probe {
-  available: boolean | null;
-  permission: PermissionOutcome | null;
-  background: boolean | null;
-  nightDate: string | null;
-  sessionCount: number | null;
-  hrCount: number | null;
-  /** Distinct dataOrigin strings seen on this device — the open item to record. */
-  origins: string[];
-  eligibility: EligibilityResult | null;
-  derived: DeriveResult | null;
-  /** D-017: how many nights of RHR history L3 had to work with. */
-  rhrNights: number | null;
-  /** D-017: true when RHR came from the on-device percentile, not the store. */
-  rhrFallback: boolean | null;
-  /** Reads that failed. A failed read is not the same fact as an empty night. */
-  readErrors: ReadIssue[];
-  /**
-   * Local-time spans, for diagnosing coverage gaps like the 2026-09-07 page-cap
-   * bug where 1000 samples sat entirely outside the session. Device-only: these
-   * are raw health timestamps and must never be uploaded (D-010).
-   */
-  hrSpan: string | null;
-  sessionSpan: string | null;
-  error: string | null;
-}
-
-const EMPTY: Probe = {
-  available: null,
-  permission: null,
-  background: null,
-  nightDate: null,
-  sessionCount: null,
-  hrCount: null,
-  origins: [],
-  eligibility: null,
-  derived: null,
-  rhrNights: null,
-  rhrFallback: null,
-  readErrors: [],
-  hrSpan: null,
-  sessionSpan: null,
-  error: null,
+  wakeTargetMin: 7 * 60,
+  toleranceMin: DEFAULT_TOLERANCE_MIN,
 };
 
+const rhrLocalStore = new SqliteRhrHistoryStore();
+
+type Route = 'loading' | 'commitment' | 'history' | 'harness';
+
 export default function App() {
-  const [probe, setProbe] = useState<Probe>(EMPTY);
-  const [busy, setBusy] = useState(true);
+  const [route, setRoute] = useState<Route>('loading');
+  const [commitment, setCommitment] = useState<StoredCommitment | null>(null);
+  const [nights, setNights] = useState<readonly DerivedNight[]>([]);
+  const [streak, setStreak] = useState(0);
+  const [lifetimeKept, setLifetimeKept] = useState(0);
+  const [promptDeviceCheck, setPromptDeviceCheck] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const tzOffsetMin = useMemo(() => -new Date().getTimezoneOffset(), []);
 
+  const refreshSummary = useCallback(async (commitmentId: number) => {
+    const s = await summariseHistory(commitmentId);
+    setNights(s.nights);
+    setStreak(s.streak);
+    setLifetimeKept(s.lifetimeKept);
+    setPromptDeviceCheck(s.promptDeviceCheck);
+  }, []);
+
   /**
-   * Runs the probe and returns what it found. Deliberately touches no state:
-   * the mount effect below must not call setState synchronously.
+   * Derive last night, backfilling first when the store is empty. Read failures
+   * are shown, never swallowed into a NO_DATA — a failed read is not a missed night.
    */
-  const probeOnce = useCallback(async (): Promise<Probe> => {
-    try {
-      const store = getHealthStore();
+  const sync = useCallback(
+    async (c: StoredCommitment) => {
+      setBusy(true);
+      setError(null);
+      try {
+        const store = getHealthStore();
+        if ((await store.requestReadPermissions()) !== 'GRANTED') {
+          setError(
+            'Zenoho needs permission to read sleep and heart rate from Health Connect.',
+          );
+          return;
+        }
 
-      const available = await store.isAvailable();
-      if (!available) return { ...EMPTY, available: false };
-
-      const permission = await store.requestReadPermissions();
-      if (permission !== 'GRANTED') return { ...EMPTY, available: true, permission };
-
-      const background = await store.hasBackgroundAccess();
-      const now = Date.now();
-      const nightDate = localDateKey(now, tzOffsetMin);
-      const { sessions, hr, readErrors } = await store.readNight(nightDate, tzOffsetMin);
-
-      const origins = Array.from(
-        new Set([...sessions.map((s) => s.sourceId), ...hr.map((h) => h.sourceId)]),
-      ).filter(Boolean);
-
-      const eligibility = checkEligibility(sessions, hr, store.platform, now);
-
-      // D-017: L3 needs an RHR history. Prefer the store's own resting-heart-rate
-      // records; otherwise derive tonight's from the sleep window and keep it locally.
-      const main = selectMainSession(sessions, nightDate, tzOffsetMin, store.platform);
-      const rhr = await loadRhrHistory(
-        store,
-        rhrLocalStore,
-        nightDate,
-        tzOffsetMin,
-        hr,
-        main?.session.startMs ?? null,
-        main?.session.endMs ?? null,
-      );
-
-      const hrSpan = spanOf(hr.map((h) => h.atMs), tzOffsetMin);
-      const sessionSpan =
-        main === null
-          ? null
-          : spanOf([main.session.startMs, main.session.endMs], tzOffsetMin);
-
-      const derived = deriveDailyState(
-        {
-          nightDate,
-          commitment: TRIAL_COMMITMENT,
-          sessions,
-          hr,
+        const nowMs = Date.now();
+        const base = {
+          store,
+          rhrLocalStore,
+          commitmentId: c.id,
+          commitment: c,
           tzOffsetMin,
-          rhrHistory: rhr.history,
-        },
-        store.platform,
-        now,
-      );
+          nowMs,
+        };
 
-      return {
-        available: true,
-        permission,
-        background,
-        nightDate,
-        sessionCount: sessions.length,
-        hrCount: hr.length,
-        origins,
-        eligibility,
-        derived,
-        rhrNights: rhr.history.length,
-        rhrFallback: rhr.usedFallback,
-        hrSpan,
-        sessionSpan,
-        readErrors: rhr.storeError === null
-          ? readErrors
-          : [...readErrors, { kind: 'rhr' as const, message: rhr.storeError }],
-        error: null,
-      };
-    } catch (e) {
-      return { ...EMPTY, error: e instanceof Error ? e.message : String(e) };
-    }
-  }, [tzOffsetMin]);
+        if ((await countNights(c.id)) === 0) {
+          await backfill(base);
+        }
 
+        const outcome = await deriveAndStoreNight({
+          ...base,
+          nightDate: localDateKey(nowMs, tzOffsetMin),
+        });
+        if (outcome === null) {
+          setError("Couldn't read sleep from Health Connect, so nothing was recorded.");
+        } else if (outcome.readErrors.length > 0) {
+          setError(outcome.readErrors.map((e) => `${e.kind}: ${e.message}`).join('\n'));
+        }
+
+        await refreshSummary(c.id);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [tzOffsetMin, refreshSummary],
+  );
+
+  // Boot: load the commitment, then either ask for one or show the history.
   useEffect(() => {
     let cancelled = false;
-    void probeOnce().then((result) => {
-      if (cancelled) return;
-      setProbe(result);
-      setBusy(false);
-    });
+    void (async () => {
+      try {
+        const existing = await loadCommitment();
+        if (cancelled) return;
+        if (existing === null) {
+          setRoute('commitment');
+          return;
+        }
+        setCommitment(existing);
+        setRoute('history');
+        await refreshSummary(existing.id);
+        await sync(existing);
+      } catch (e) {
+        if (cancelled) return;
+        setError(e instanceof Error ? e.message : String(e));
+        setRoute('commitment');
+      }
+    })();
     return () => {
       cancelled = true;
     };
-  }, [probeOnce]);
+  }, [refreshSummary, sync]);
 
-  /** Button handler: a reset here is fine, it is not an effect body. */
-  const rerun = useCallback(() => {
-    setBusy(true);
-    setProbe(EMPTY);
-    void probeOnce().then((result) => {
-      setProbe(result);
-      setBusy(false);
-    });
-  }, [probeOnce]);
+  const handleSave = useCallback(
+    async (c: Commitment) => {
+      setSaving(true);
+      try {
+        const stored = await saveCommitment(c);
+        setCommitment(stored);
+        // Spec §10: one local trigger a day, at wake_target + 60 min.
+        if ((await requestNotificationPermission()) === 'GRANTED') {
+          await scheduleMorningSync(stored.wakeTargetMin);
+        }
+        setRoute('history');
+        await refreshSummary(stored.id);
+        await sync(stored);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setSaving(false);
+      }
+    },
+    [refreshSummary, sync],
+  );
 
-  const d = probe.derived?.night;
-  // A sleep read that threw would otherwise look exactly like NO_SOURCE.
-  const sleepReadFailed = probe.readErrors.some((e) => e.kind === 'sleep');
+  if (route === 'loading') {
+    return (
+      <View style={[t.screen, { alignItems: 'center', justifyContent: 'center' }]}>
+        <StatusBar style="auto" />
+        <ActivityIndicator color={colors.ink} />
+      </View>
+    );
+  }
+
+  if (route === 'commitment') {
+    return (
+      <View style={t.screen}>
+        <StatusBar style="auto" />
+        {error !== null && (
+          <View style={[t.notice, { margin: 20, marginBottom: 0 }]}>
+            <Text style={t.noticeBody}>{error}</Text>
+          </View>
+        )}
+        <CommitmentScreen
+          initial={commitment ?? STARTING_COMMITMENT}
+          saving={saving}
+          onSave={handleSave}
+          onCancel={commitment ? () => setRoute('history') : undefined}
+        />
+      </View>
+    );
+  }
+
+  if (commitment === null) {
+    return (
+      <View style={[t.screen, { alignItems: 'center', justifyContent: 'center' }]}>
+        <StatusBar style="auto" />
+        <ActivityIndicator color={colors.ink} />
+      </View>
+    );
+  }
+
+  if (route === 'harness') {
+    return (
+      <View style={t.screen}>
+        <StatusBar style="auto" />
+        <HarnessScreen
+          commitment={commitment}
+          commitmentId={commitment.id}
+          onClose={() => setRoute('history')}
+        />
+      </View>
+    );
+  }
 
   return (
-    <View style={styles.screen}>
+    <View style={t.screen}>
       <StatusBar style="auto" />
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.h1}>Zenoho2 · T-001 harness</Text>
-        <Text style={styles.sub}>
-          {Platform.OS} · UTC offset {tzOffsetMin} min
-        </Text>
-
-        <Row label="Health store available" value={fmt(probe.available)} />
-        <Row label="Read permission" value={probe.permission ?? '—'} />
-        <Row label="Background read granted" value={fmt(probe.background)} />
-        <Row label="Night date" value={probe.nightDate ?? '—'} />
-        <Row label="Sleep sessions read" value={fmt(probe.sessionCount)} />
-        <Row label="HR samples read" value={fmt(probe.hrCount)} />
-        <Row label="HR span (local)" value={probe.hrSpan ?? '—'} />
-        <Row label="Main session (local)" value={probe.sessionSpan ?? '—'} />
-
-        <Text style={styles.h2}>Source origins seen</Text>
-        {probe.origins.length === 0 ? (
-          <Text style={styles.mono}>—</Text>
-        ) : (
-          probe.origins.map((o) => (
-            <Text key={o} style={styles.mono}>
-              {o}
-            </Text>
-          ))
-        )}
-
-        <Text style={styles.h2}>Eligibility</Text>
-        <Row label="Outcome" value={probe.eligibility?.outcome ?? '—'} />
-        <Row label="Brand unverified" value={fmt(probe.eligibility?.brandUnverified)} />
-        {probe.eligibility?.outcome === 'NO_WEARABLE_SOURCE' && (
-          <View style={styles.notice}>
-            <Text style={styles.noticeTitle}>{NO_WEARABLE_COPY.title}</Text>
-            <Text style={styles.noticeBody}>{NO_WEARABLE_COPY.body}</Text>
-          </View>
-        )}
-
-        {probe.readErrors.length > 0 && (
-          <View style={styles.notice}>
-            <Text style={styles.noticeTitle}>Some reads failed</Text>
-            <Text style={styles.noticeBody}>
-              The rows below are computed from whatever did come back. A failed read
-              is not the same as a quiet night, so this is not a real result.
-            </Text>
-            {probe.readErrors.map((e) => (
-              <Text key={`${e.kind}:${e.message}`} style={styles.mono}>
-                {e.kind}: {e.message}
-              </Text>
-            ))}
-          </View>
-        )}
-
-        <Text style={styles.h2}>Derived night</Text>
-        <Row label="State" value={sleepReadFailed ? 'not computed' : d?.state ?? '—'} />
-        <Row
-          label="Integrity"
-          value={sleepReadFailed ? 'not computed' : d?.integrity ?? '—'}
-        />
-        <Row label="Wear presence" value={fmt(d?.wearPresence)} />
-        <Row label="Deviation (min)" value={fmt(d?.deviationMin)} />
-        <Row label="RHR nights available" value={fmt(probe.rhrNights)} />
-        <Row label="RHR from fallback" value={fmt(probe.rhrFallback)} />
-        <Row
-          label="Wear ratio"
-          value={
-            probe.derived ? `${Math.round(probe.derived.wearRatio * 100)}%` : '—'
-          }
-        />
-
-        {probe.error !== null && (
-          <View style={styles.notice}>
-            <Text style={styles.noticeTitle}>Error</Text>
-            <Text style={styles.mono}>{probe.error}</Text>
-          </View>
-        )}
-
-        <Pressable style={styles.button} onPress={rerun} disabled={busy}>
-          <Text style={styles.buttonText}>{busy ? 'Reading…' : 'Read again'}</Text>
-        </Pressable>
-
-        <Text style={styles.footnote}>
-          Sleep and heart-rate values read here stay on this device. Nothing is
-          uploaded in T-001.
-        </Text>
-      </ScrollView>
+      <HistoryScreen
+        commitment={commitment}
+        nights={nights}
+        streak={streak}
+        lifetimeKept={lifetimeKept}
+        promptDeviceCheck={promptDeviceCheck}
+        busy={busy}
+        error={error}
+        onRefresh={() => void sync(commitment)}
+        onEditCommitment={() => setRoute('commitment')}
+        onOpenHarness={() => setRoute('harness')}
+      />
     </View>
   );
 }
-
-/**
- * Local `HH:MM -> HH:MM` for a set of instants, so a coverage gap is visible at a
- * glance. Stays on the device; never part of any payload (D-010).
- */
-function spanOf(instants: number[], tzOffsetMin: number): string | null {
-  if (instants.length === 0) return null;
-  const hhmm = (ms: number) => {
-    const m = localMinuteOfDay(ms, tzOffsetMin);
-    return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
-  };
-  const lo = Math.min(...instants);
-  const hi = Math.max(...instants);
-  const days = Math.round((hi - lo) / 86_400_000);
-  const suffix = days > 0 ? ` (+${days}d)` : '';
-  return `${hhmm(lo)} → ${hhmm(hi)}${suffix}`;
-}
-
-function fmt(v: boolean | number | null | undefined): string {
-  if (v === null || v === undefined) return '—';
-  if (typeof v === 'boolean') return v ? 'yes' : 'no';
-  return String(v);
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.row}>
-      <Text style={styles.rowLabel}>{label}</Text>
-      <Text style={styles.rowValue}>{value}</Text>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#faf9f7' },
-  content: { padding: 20, paddingTop: 64, gap: 2 },
-  h1: { fontSize: 20, fontWeight: '600', color: '#1a1a1a' },
-  sub: { fontSize: 13, color: '#6b6b6b', marginBottom: 16 },
-  h2: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#6b6b6b',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    marginTop: 20,
-    marginBottom: 6,
-  },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 6,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#e2e0dc',
-    gap: 12,
-  },
-  rowLabel: { fontSize: 15, color: '#3a3a3a', flexShrink: 1 },
-  rowValue: { fontSize: 15, color: '#1a1a1a', fontWeight: '500' },
-  mono: {
-    fontFamily: Platform.select({ ios: 'Menlo', default: 'monospace' }),
-    fontSize: 12,
-    color: '#1a1a1a',
-    paddingVertical: 2,
-  },
-  notice: {
-    backgroundColor: '#fff4e5',
-    borderRadius: 10,
-    padding: 14,
-    marginTop: 12,
-    gap: 6,
-  },
-  noticeTitle: { fontSize: 15, fontWeight: '600', color: '#1a1a1a' },
-  noticeBody: { fontSize: 14, color: '#3a3a3a', lineHeight: 20 },
-  button: {
-    marginTop: 28,
-    backgroundColor: '#1a1a1a',
-    borderRadius: 10,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  buttonText: { color: '#ffffff', fontSize: 15, fontWeight: '600' },
-  footnote: { fontSize: 12, color: '#6b6b6b', marginTop: 20, lineHeight: 18 },
-});

@@ -1,6 +1,6 @@
 # T-001 · Foundation: repo, health-store bridge, on-device derivation
 
-Status: IN_REVIEW-COMPLETE · Owner: Claude Code (maker) · Reviewer: Claude Web (checker) · Approver: Founder
+Status: DONE (approved by checker 2026-09-07) · Owner: Claude Code (maker) · Reviewer: Claude Web (checker) · Approver: Founder
 Report: reports/R-001-foundation.md (2026-09-07). All deliverables complete. AC-1 and the
 AC-10 Android half MET on device run 3 (S26 Ultra, Android 16): real MISSED derived from a
 genuine night at 100% wear ratio. AC-10 iOS half DEFERRED (D-013). AC-3 out of scope here.

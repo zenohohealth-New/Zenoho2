@@ -155,6 +155,37 @@ can never accumulate. One store rather than several keeps the purge auditable in
 D-010 unchanged: nothing in this database is ever uploaded.
 Status: DECIDED
 
+## D-021 · (no decision recorded)
+The checker's post-R-001 rulings jumped from D-020 to D-022, leaving this id unused.
+Flagged rather than assumed deliberate: the last such gap (D-015) turned out to be a real
+decision taken in chat and never written down. If D-021 was decided somewhere, record it here;
+otherwise leave the number retired and do not reuse it.
+Status: OPEN (clerical)
+
+## D-022 · 2026-09-07 · Brand verification is evidence-gated
+No wearable brand is marked verified until its source string AND a non-zero wear ratio are
+observed on a real device. The T-001 harness ships hidden in-app as the verification tool.
+Why: R-001 run 2 showed that observing the source string alone is not enough — Garmin's
+dataOrigin was correct while the wear ratio was 0%, so the source looked verified while the
+pipeline was broken. Both signals together are what distinguish "we can see this brand" from
+"this brand actually works".
+Status: DECIDED
+
+## D-023 · 2026-09-07 · Every task ends on the phone
+Every task from T-002 onward ends with a standalone preview APK on the founder's phone.
+Dev mode is for building; preview is for living with it.
+Why: R-001 needed three device runs to find two integration bugs that a green test suite, a
+clean typecheck and a successful prebuild all missed. Shipping a preview build per task keeps
+that discovery loop one task long instead of several.
+Status: DECIDED
+
+## D-024 · 2026-09-07 · Task order changed — local engine before backend
+T-002 is the local nightly engine (no backend); the backend moves to T-003.
+Why: the local engine is unblocked tonight, it exercises the D-020 SQLite path that R-001
+flagged as never-executed, and it starts accumulating nights immediately — the D-009 L3
+baseline needs 14 before it can say anything at all.
+Status: DECIDED
+
 ---
 
 ## OPEN ITEMS (blocked on a device, not on a person)

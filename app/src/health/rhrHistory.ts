@@ -39,15 +39,23 @@ export async function loadRhrHistory(
   sleepStartMs: number | null,
   sleepEndMs: number | null,
   acceptSample?: (sample: HrSample) => boolean,
+  /**
+   * AC-2.4: skip the store's own resting heart rate and force the D-017 fallback,
+   * so the D-020 SQLite write path can be exercised on a device whose wearable
+   * supplies RHR directly. Diagnostic only; never on in normal operation.
+   */
+  forceFallback: boolean = false,
 ): Promise<RhrHistoryResult> {
   // A failing RHR read must degrade to the fallback, never propagate: RHR only
   // feeds an integrity flag, so it must not be able to take the night down with it.
   let fromStore: RhrNight[] = [];
   let storeError: string | null = null;
-  try {
-    fromStore = await store.readRhrHistory(RHR_HISTORY_DAYS, tzOffsetMin);
-  } catch (e) {
-    storeError = e instanceof Error ? e.message : String(e);
+  if (!forceFallback) {
+    try {
+      fromStore = await store.readRhrHistory(RHR_HISTORY_DAYS, tzOffsetMin);
+    } catch (e) {
+      storeError = e instanceof Error ? e.message : String(e);
+    }
   }
 
   if (fromStore.length > 0) {
