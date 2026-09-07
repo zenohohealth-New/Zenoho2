@@ -1,0 +1,50 @@
+{
+  "expo": {
+    "name": "Zenoho2",
+    "slug": "zenoho2",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.zenoho.zenoho2",
+      "infoPlist": {
+        "NSHealthShareUsageDescription": "Zenoho reads your sleep sessions and heart rate on this device to check whether you kept your own sleep-window promise. These raw values stay on your phone and are never uploaded."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.zenoho.zenoho2",
+      "minSdkVersion": 28,
+      "permissions": [
+        "android.permission.health.READ_SLEEP",
+        "android.permission.health.READ_HEART_RATE",
+        "android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND",
+        "android.permission.health.READ_HEALTH_DATA_HISTORY"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "scheme": "zenoho2",
+    "plugins": [
+      "expo-dev-client",
+      "react-native-health-connect",
+      [
+        "@kingstinct/react-native-healthkit",
+        {
+          "background": true,
+          "NSHealthShareUsageDescription": "Zenoho reads your sleep sessions and heart rate on this device to check whether you kept your own sleep-window promise. These raw values stay on your phone and are never uploaded.",
+          "NSHealthUpdateUsageDescription": false
+        }
+      ]
+    ]
+  }
+}
