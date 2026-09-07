@@ -234,6 +234,22 @@ names, planned spend, token names and expiries, strategic risk list — is an in
 setup, not a secret in itself, but a public repo is the wrong place for it.
 Status: DECIDED
 
+## D-030 · 2026-09-07 · Public repo is world-readable at all times
+HANDOFF purged from git history 2026-09-07; treat the public repo as world-readable at all
+times — no personal, operational or financial detail is ever committed.
+Method: `git filter-repo --path HANDOFF-2026-09-07.md --invert-paths`, followed by a force-push
+to origin/main. Verified: `git log --all --full-history -- HANDOFF-2026-09-07.md` returns
+nothing; the file remains on disk and gitignored (D-029).
+Caveat recorded rather than glossed: a rewrite removes the file from this repository's history,
+not from any clone, fork or cache made while it was published. It was live on a public repo
+between commits 51031a6 and 0f3c192. It contained no secret values — no token strings, keys or
+passwords — so the exposure is an inventory of the setup, not a credential leak. Anyone who
+cloned in that window still has it. Rewriting was still worth doing; assuming it undoes the
+publication is not.
+Consequence for everyone working in this repo: history rewrites invalidate existing clones. A
+clone taken before this point must be re-cloned, not pulled.
+Status: DECIDED
+
 ---
 
 ## FINDINGS LOG — 2026-09-07 (evidence, not decisions)
