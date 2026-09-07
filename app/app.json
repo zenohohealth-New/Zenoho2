@@ -22,7 +22,6 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.zenoho.zenoho2",
-      "minSdkVersion": 28,
       "permissions": [
         "android.permission.health.READ_SLEEP",
         "android.permission.health.READ_HEART_RATE",
