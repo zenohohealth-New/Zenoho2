@@ -30,7 +30,11 @@ import {
   NO_WEARABLE_COPY,
   type EligibilityResult,
 } from './src/eligibility';
-import { getHealthStore, type PermissionOutcome } from './src/health';
+import {
+  getHealthStore,
+  type PermissionOutcome,
+  type ReadIssue,
+} from './src/health';
 import { loadRhrHistory } from './src/health/rhrHistory';
 import { SqliteRhrHistoryStore } from './src/storage/sqliteRhrStore';
 
@@ -59,6 +63,8 @@ interface Probe {
   rhrNights: number | null;
   /** D-017: true when RHR came from the on-device percentile, not the store. */
   rhrFallback: boolean | null;
+  /** Reads that failed. A failed read is not the same fact as an empty night. */
+  readErrors: ReadIssue[];
   error: string | null;
 }
 
@@ -74,6 +80,7 @@ const EMPTY: Probe = {
   derived: null,
   rhrNights: null,
   rhrFallback: null,
+  readErrors: [],
   error: null,
 };
 
@@ -100,7 +107,7 @@ export default function App() {
       const background = await store.hasBackgroundAccess();
       const now = Date.now();
       const nightDate = localDateKey(now, tzOffsetMin);
-      const { sessions, hr } = await store.readNight(nightDate, tzOffsetMin);
+      const { sessions, hr, readErrors } = await store.readNight(nightDate, tzOffsetMin);
 
       const origins = Array.from(
         new Set([...sessions.map((s) => s.sourceId), ...hr.map((h) => h.sourceId)]),
@@ -146,6 +153,9 @@ export default function App() {
         derived,
         rhrNights: rhr.history.length,
         rhrFallback: rhr.usedFallback,
+        readErrors: rhr.storeError === null
+          ? readErrors
+          : [...readErrors, { kind: 'rhr' as const, message: rhr.storeError }],
         error: null,
       };
     } catch (e) {
@@ -176,6 +186,8 @@ export default function App() {
   }, [probeOnce]);
 
   const d = probe.derived?.night;
+  // A sleep read that threw would otherwise look exactly like NO_SOURCE.
+  const sleepReadFailed = probe.readErrors.some((e) => e.kind === 'sleep');
 
   return (
     <View style={styles.screen}>
@@ -214,9 +226,27 @@ export default function App() {
           </View>
         )}
 
+        {probe.readErrors.length > 0 && (
+          <View style={styles.notice}>
+            <Text style={styles.noticeTitle}>Some reads failed</Text>
+            <Text style={styles.noticeBody}>
+              The rows below are computed from whatever did come back. A failed read
+              is not the same as a quiet night, so this is not a real result.
+            </Text>
+            {probe.readErrors.map((e) => (
+              <Text key={`${e.kind}:${e.message}`} style={styles.mono}>
+                {e.kind}: {e.message}
+              </Text>
+            ))}
+          </View>
+        )}
+
         <Text style={styles.h2}>Derived night</Text>
-        <Row label="State" value={d?.state ?? '—'} />
-        <Row label="Integrity" value={d?.integrity ?? '—'} />
+        <Row label="State" value={sleepReadFailed ? 'not computed' : d?.state ?? '—'} />
+        <Row
+          label="Integrity"
+          value={sleepReadFailed ? 'not computed' : d?.integrity ?? '—'}
+        />
         <Row label="Wear presence" value={fmt(d?.wearPresence)} />
         <Row label="Deviation (min)" value={fmt(d?.deviationMin)} />
         <Row label="RHR nights available" value={fmt(probe.rhrNights)} />

@@ -6,9 +6,22 @@
  */
 import type { HrSample, RhrNight, SleepSession } from '../derive/types';
 
+/** Which read failed, and what the platform said. */
+export interface ReadIssue {
+  readonly kind: 'sleep' | 'hr' | 'rhr';
+  readonly message: string;
+}
+
 export interface NightReadResult {
   readonly sessions: SleepSession[];
   readonly hr: HrSample[];
+  /**
+   * Non-empty when a read threw. Reads are isolated so one failure cannot blank
+   * the others, but that makes empty arrays ambiguous — so callers MUST check
+   * this before treating an empty result as evidence of absence. A failed sleep
+   * read is not a NO_DATA night, and must never be persisted as one.
+   */
+  readonly readErrors: ReadIssue[];
 }
 
 export type PermissionOutcome = 'GRANTED' | 'DENIED' | 'UNAVAILABLE';

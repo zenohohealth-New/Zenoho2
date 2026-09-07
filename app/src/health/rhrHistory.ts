@@ -19,6 +19,8 @@ export interface RhrHistoryResult {
   readonly history: RhrNight[];
   /** True when the value came from the fallback rather than the store. */
   readonly usedFallback: boolean;
+  /** Set when the store's own RHR read failed; the fallback was used instead. */
+  readonly storeError: string | null;
 }
 
 /**
@@ -38,17 +40,36 @@ export async function loadRhrHistory(
   sleepEndMs: number | null,
   acceptSample?: (sample: HrSample) => boolean,
 ): Promise<RhrHistoryResult> {
-  const fromStore = await store.readRhrHistory(RHR_HISTORY_DAYS, tzOffsetMin);
+  // A failing RHR read must degrade to the fallback, never propagate: RHR only
+  // feeds an integrity flag, so it must not be able to take the night down with it.
+  let fromStore: RhrNight[] = [];
+  let storeError: string | null = null;
+  try {
+    fromStore = await store.readRhrHistory(RHR_HISTORY_DAYS, tzOffsetMin);
+  } catch (e) {
+    storeError = e instanceof Error ? e.message : String(e);
+  }
+
   if (fromStore.length > 0) {
-    return { history: fromStore, usedFallback: false };
+    return { history: fromStore, usedFallback: false, storeError };
   }
 
   if (sleepStartMs !== null && sleepEndMs !== null) {
     const restingBpm = deriveNightlyRhr(hr, sleepStartMs, sleepEndMs, acceptSample);
     if (restingBpm !== null) {
-      await localStore.put({ nightDate, restingBpm });
+      try {
+        await localStore.put({ nightDate, restingBpm });
+      } catch (e) {
+        // A local write failure costs tomorrow's baseline, not tonight's state.
+        storeError ??= e instanceof Error ? e.message : String(e);
+      }
     }
   }
 
-  return { history: await localStore.load(), usedFallback: true };
+  try {
+    return { history: await localStore.load(), usedFallback: true, storeError };
+  } catch (e) {
+    storeError ??= e instanceof Error ? e.message : String(e);
+    return { history: [], usedFallback: true, storeError };
+  }
 }

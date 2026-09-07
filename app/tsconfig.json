@@ -15,8 +15,6 @@
   "include": [
     "**/*.ts",
     "**/*.tsx",
-    "expo-env.d.ts",
-    ".expo/types/**/*.ts",
     "../tests/**/*.ts"
   ],
   "exclude": [

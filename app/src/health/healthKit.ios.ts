@@ -22,7 +22,12 @@ import type {
   RhrNight,
   SleepSession,
 } from '../derive/types';
-import type { HealthStore, NightReadResult, PermissionOutcome } from './types';
+import type {
+  HealthStore,
+  NightReadResult,
+  PermissionOutcome,
+  ReadIssue,
+} from './types';
 import { nightReadWindow } from './window';
 
 const SLEEP = 'HKCategoryTypeIdentifierSleepAnalysis' as const;
@@ -39,6 +44,11 @@ const ASLEEP_VALUES = new Set([1, 3, 4, 5]); // asleepUnspecified, core, deep, R
 function recordingMethodFrom(metadata: Record<string, unknown> | undefined): RecordingMethod {
   if (metadata && metadata.HKWasUserEntered === true) return 'MANUAL';
   return 'AUTOMATIC';
+}
+
+/** Platform exceptions are opaque objects as often as they are Errors. */
+function describe(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
 }
 
 export class HealthKitStore implements HealthStore {
@@ -72,39 +82,65 @@ export class HealthKitStore implements HealthStore {
     return status !== undefined;
   }
 
+  /** Reads are isolated exactly as on Android; see the note there. */
   async readNight(nightDate: string, tzOffsetMin: number): Promise<NightReadResult> {
     const { startMs, endMs } = nightReadWindow(nightDate, tzOffsetMin);
     const filter = { date: { startDate: new Date(startMs), endDate: new Date(endMs) } };
+    const readErrors: ReadIssue[] = [];
 
-    const categorySamples = await queryCategorySamples(SLEEP, { filter, limit: -1 });
-    const sessions: SleepSession[] = categorySamples
-      .filter((s) => ASLEEP_VALUES.has(s.value as unknown as number))
-      .map((s) => ({
-        // D-009 L1 evidence: the writing app's bundle id, kept verbatim.
+    let sessions: SleepSession[] = [];
+    try {
+      const categorySamples = await queryCategorySamples(SLEEP, { filter, limit: -1 });
+      sessions = categorySamples
+        .filter((s) => ASLEEP_VALUES.has(s.value as unknown as number))
+        .map((s) => ({
+          // D-009 L1 evidence: the writing app's bundle id, kept verbatim.
+          sourceId: s.sourceRevision.source.bundleIdentifier,
+          startMs: s.startDate.getTime(),
+          endMs: s.endDate.getTime(),
+          recordingMethod: recordingMethodFrom(s.metadata as Record<string, unknown>),
+        }));
+    } catch (e) {
+      readErrors.push({ kind: 'sleep', message: describe(e) });
+    }
+
+    let hr: HrSample[] = [];
+    try {
+      const hrSamples = await queryQuantitySamples(HEART_RATE, {
+        filter,
+        limit: -1,
+        unit: 'count/min' as never,
+      });
+      hr = hrSamples.map((s) => ({
         sourceId: s.sourceRevision.source.bundleIdentifier,
-        startMs: s.startDate.getTime(),
-        endMs: s.endDate.getTime(),
+        atMs: s.startDate.getTime(),
+        bpm: s.quantity,
+        // D-019: provenance rides along on every sample.
         recordingMethod: recordingMethodFrom(s.metadata as Record<string, unknown>),
       }));
+    } catch (e) {
+      readErrors.push({ kind: 'hr', message: describe(e) });
+    }
 
-    const hrSamples = await queryQuantitySamples(HEART_RATE, {
-      filter,
-      limit: -1,
-      unit: 'count/min' as never,
-    });
-    const hr: HrSample[] = hrSamples.map((s) => ({
-      sourceId: s.sourceRevision.source.bundleIdentifier,
-      atMs: s.startDate.getTime(),
-      bpm: s.quantity,
-      // D-019: provenance rides along on every sample.
-      recordingMethod: recordingMethodFrom(s.metadata as Record<string, unknown>),
-    }));
-
-    return { sessions, hr };
+    return { sessions, hr, readErrors };
   }
 
-  /** D-017: HealthKit exposes resting heart rate directly. NEVER RUN (D-013). */
+  /**
+   * D-017: HealthKit exposes resting heart rate directly. NEVER RUN (D-013).
+   * Degrades to [] on failure so the caller can use the percentile fallback.
+   */
   async readRhrHistory(days: number, tzOffsetMin: number): Promise<RhrNight[]> {
+    try {
+      return await this.readRhrHistoryOrThrow(days, tzOffsetMin);
+    } catch {
+      return [];
+    }
+  }
+
+  private async readRhrHistoryOrThrow(
+    days: number,
+    tzOffsetMin: number,
+  ): Promise<RhrNight[]> {
     const endMs = Date.now();
     const startMs = endMs - days * 24 * 60 * 60_000;
 

@@ -35,7 +35,7 @@ function storeWithoutRhr(): HealthStore {
     isAvailable: vi.fn(async () => true),
     requestReadPermissions: vi.fn(async () => 'GRANTED' as const),
     hasBackgroundAccess: vi.fn(async () => false),
-    readNight: vi.fn(async () => ({ sessions: [], hr: [] })),
+    readNight: vi.fn(async () => ({ sessions: [], hr: [], readErrors: [] })),
     readRhrHistory: vi.fn(async () => [] as RhrNight[]),
   };
 }
