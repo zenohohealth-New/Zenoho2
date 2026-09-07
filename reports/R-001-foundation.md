@@ -4,11 +4,12 @@ Task: tasks/T-001-foundation.md · Maker: Claude Code · Status set to IN_REVIEW
 Spec sections read: §4, §5, §7, §9, §11, §12, §13 · Decisions: D-003, D-009, D-010, D-011, D-012, D-013, D-014
 Date: 2026-09-07 · Revised 2026-09-07 after checker review (code PASS, device evidence BLOCKED)
 
-> **Headline for the checker:** deliverables 1–6 are complete and green in CI-equivalent
-> local runs. **Deliverable "device evidence" is NOT met.** No APK was ever installed on a
-> phone, because this machine has no JDK, no Android SDK and no `adb`, and EAS is not
-> logged in. AC-1 and the Android half of AC-10 are therefore **unproven**, not passed.
-> Section 9 and "Blocked on founder action" say exactly what is needed to close that.
+> **Headline for the checker:** all deliverables complete. **AC-1 MET and the AC-10 Android
+> half MET** on run 3 (Samsung Galaxy S26 Ultra, Android 16), with a real MISSED derived from
+> a genuine night at a 100% wear ratio. iOS stays DEFERRED by D-013. It took three device
+> runs and two integration bugs to get here; §9 and §12 record both. One thing is still
+> unexecuted and is called out in §6: the D-020 SQLite write path never ran, because Garmin
+> supplies resting heart rate directly and the fallback that writes to it was never reached.
 >
 > **Revision note:** checker rulings D-016 to D-019 are implemented; `expo-build-properties`
 > and `expo lint` are in. Section 9 is deliberately untouched — it stays as it is until the
@@ -164,7 +165,7 @@ fix(health): scope HR read to the sleep session and paginate; allow-list v2
 | Unit + fixtures | `npm test` (vitest) | **82/82 passed**, 6 files |
 | Typecheck | `npx tsc --noEmit` | **clean**, 0 errors — covers `app/src` (both platform bridges) and `tests/` |
 | Native config | `npx expo prebuild --platform android --clean` | **succeeded**; manifest and `minSdkVersion=28` inspected |
-| Android build | `eas build --profile development --platform android` | **SUCCEEDED** (`0d617dfd`), installed and run on the S26 Ultra |
+| Android build | `eas build --profile development --platform android` | **SUCCEEDED** (`0d617dfd`), installed and run on the S26 Ultra — 3 runs, third passing |
 | iOS build | — | **SKIPPED** by D-013 |
 | RLS denial (AC-3) | — | **SKIPPED**; no backend exists in T-001 by instruction |
 | Lint | `npm run lint` (`eslint .`) | **clean**, 0 errors 0 warnings — see the correction below |
@@ -303,11 +304,15 @@ Each of these was a genuine fork in the spec. None is invented policy; all are r
    `SqliteRhrHistoryStore` is in the production path, the in-memory double is test-only and a
    lint rule now blocks it from being imported into app source. The schema carries a
    `user_version` migration ladder so `daily_states` can be added in T-002 without a rewrite.
-   **Caveat the checker should weigh:** none of the SQLite code has executed. It cannot run in
-   the Node test suite (native module) and nothing has run on a phone, so the migration, the
-   upsert and the retention `DELETE` are unexercised. The retention *policy* is tested through
-   the pure `mergeRhrNight`, and the SQL is written to match it, but "matches by inspection"
-   is not "matches". First device run should confirm the RHR row count grows and caps at 45.
+   **Caveat the checker should weigh, and it survived all three device runs:** the SQLite
+   write path has still never executed. Run 3 reported `RHR from fallback: no`, meaning Garmin
+   supplied resting heart rate directly — and `loadRhrHistory` returns early in that case
+   without touching the local store. So `SqliteRhrHistoryStore.put`, the migration and the
+   retention `DELETE` remain unexercised on device, and cannot run in the Node suite either.
+   The retention *policy* is tested through the pure `mergeRhrNight`, and the SQL is written to
+   match it, but "matches by inspection" is not "matches". It will first execute for a user
+   whose wearable writes no resting heart rate — i.e. someone who is not the founder — which is
+   the worst place to discover a defect. **Recommend T-002 exercise it deliberately.**
 4. ~~`minSdkVersion` is not pinned to 28~~ — **CLOSED.** `expo-build-properties` approved and
    added; `android.minSdkVersion=28` verified in the generated project.
 5. ~~No linter~~ — **CLOSED.** `expo lint` approved and configured; clean.
@@ -349,10 +354,16 @@ Each of these was a genuine fork in the spec. None is invented policy; all are r
 - **Android-only for the foreseeable future** (D-013). D-003's Tier 1 list is materially
   stronger on Android, so this is survivable, but the iOS bridge is accumulating unverified
   code with no feedback loop.
-- **Unexecuted code is accumulating.** The SQLite layer joins the iOS bridge in the category
-  of code that compiles, typechecks and reads correctly but has never run. That category grows
-  with every task until an APK is installed, and each addition makes the first device run more
-  likely to surface several problems at once rather than one.
+- **Unexecuted code is still accumulating, and the device runs proved the point.** Two of the
+  three runs failed on integration facts invisible to a green suite, a clean typecheck and a
+  successful prebuild: an undeclared manifest permission, and a platform paging default. What
+  remains in that category after run 3 is the iOS bridge (whole) and the D-020 SQLite write
+  path (see §6 item 3) — the latter now demonstrably unreachable on the founder's own device,
+  so it will first run for someone else.
+- **One device, one wearable, one night.** Run 3 is a single MISSED from a single Garmin watch
+  in one timezone. It proves the pipeline end to end; it does not exercise KEPT, TRAVEL, a
+  second brand, a DST change, or a night where Garmin writes sparsely. The fixture suite covers
+  those shapes, but only against my reading of the platform.
 - **A gate I reported as passing was not running.** Corrected here, but the lesson generalises:
   every gate in §3 should be provably able to fail. The D-020 lint rule now is; the others earn
   that credibility only by having failed at some point during development, which the test suite
@@ -369,16 +380,16 @@ Each of these was a genuine fork in the spec. None is invented policy; all are r
 1. ~~Founder answers the approval questions~~ — done. D-015 to D-020 are all recorded and
    implemented, except D-018, which is deferred with iOS by ruling. Nothing is waiting on a
    decision any more.
-2. Founder logs into EAS; I run the development APK build and hand over the install steps.
-3. Founder installs it on the S26 Ultra, grants Health Connect permissions, and screenshots
-   the harness. That single screenshot closes AC-1, the Android half of AC-10, and both
-   original T-001 open items (background-read availability, real `dataOrigin` strings).
-4. I fold the observed origin strings into `source-allowlist.v2.json` **with evidence**, and
-   re-run the suite against a fixture built from the real night.
-5. File the Play Console health declaration the same week, in parallel with all of the above.
-
-Only then T-002 (backend, schema, RLS), where AC-3's denial test finally has something to
-deny.
+2. ~~EAS build, install, device evidence~~ — done across three runs; AC-1 and the AC-10
+   Android half are MET (§9).
+3. ~~Fold the observed origin strings into the allow-list with evidence~~ — done, v2.
+4. **File the Play Console health declaration this week.** Unchanged from the first revision
+   and still unstarted. Approval takes up to 7 days plus 5–7 business days of whitelist
+   propagation, so it is the longest pole in the tent and nothing else depends on it.
+5. **T-002 (backend, schema, RLS)** — the checker writes that spec; I have not started it.
+   Three things from T-001 should feed into it: AC-3's denial test finally has something to
+   deny; the sync path must treat a non-empty `readErrors` as "unknown", never persisting a
+   failed read as NO_DATA; and the D-020 SQLite write path needs deliberate exercise (§6.3).
 
 ---
 
@@ -391,32 +402,58 @@ deny.
 | Phone | **Samsung Galaxy S26 Ultra** |
 | OS | **Android 16, One UI 8.5**, build `BP4A.251205.006`, security patch 2026-07-05 |
 | Wearable | **Garmin Vívoactive 5** via Garmin Connect → Health Connect |
-| iOS | none — **DEFERRED** (D-013). No result will be entered here that did not come off real hardware. |
+| Build | EAS development profile `0d617dfd`, plus a JS-only dev-server reload for run 3 |
+| iOS | none — **DEFERRED** (D-013). No result appears here that did not come off real hardware. |
 
 **Run log**
 
-| Run | Build | Outcome |
-|---|---|---|
-| 1 | first dev APK | **FAILED.** `SecurityException: Caller requires android.permission.health.READ_RESTING_HEART_RATE`. The manifest lacked the permission, and the unguarded read took the whole probe down: every row showed "—". |
-| 2 | `0d617dfd` | **PARTIAL.** Reads succeeded — 2 sleep sessions, 1000 HR samples, origin `com.garmin.android.apps.connectmobile`, eligibility ELIGIBLE, background read granted, 6 nights of RHR read directly. But wear ratio was **0%**, so the night derived as NO_DATA / NO_WEAR. Diagnosed as the Health Connect 1000-record page cap: the read returned the oldest samples in the 36-hour window, none of which overlapped the session. Fixed and regression-tested; not yet re-run. |
-| 3 | — | **NOT YET RUN.** JS-only change; reloads over the dev server. |
+| Run | Outcome |
+|---|---|
+| 1 | **FAILED.** `SecurityException: Caller requires android.permission.health.READ_RESTING_HEART_RATE`. The manifest lacked the permission and the unguarded read took the whole probe down — every row showed "—". |
+| 2 | **PARTIAL.** Reads succeeded, but wear ratio was 0% against exactly 1000 HR samples, so the night derived as NO_DATA / NO_WEAR. Diagnosed as the Health Connect 1000-record page cap returning the oldest samples in the 36-hour window. |
+| 3 | **PASS.** See below. |
 
-**What run 2 did establish, as fact rather than inference**
+**Run 3 — the acceptance evidence**
 
-- Health Connect is reachable from the app on this device, and the permission flow works.
-- Background read is **granted and available on Android 16 / One UI 8.5** — closing the first
-  of T-001's two original open items.
-- The real Android dataOrigin for Garmin is `com.garmin.android.apps.connectmobile` — closing
-  the second. Allow-list v2 marks it `verified: true` with this run as evidence. Every other
-  identifier in that file remains unverified.
-- Garmin **does** write `RestingHeartRateRecord`: 6 nights were read directly and the D-017
-  fallback was not used. The fallback is therefore unnecessary for Garmin, and is retained
-  only for brands that write no resting heart rate.
+| Row | Value |
+|---|---|
+| Health store available | yes |
+| Read permission | GRANTED |
+| **Background read granted** | **yes** |
+| Night date | 2026-09-07 |
+| Sleep sessions read | 2 |
+| HR samples read | **963** (below the 1000 cap — no longer truncated) |
+| HR span (local) | **23:34 → 08:00 (+1d)** |
+| Main session (local) | **23:46 → 08:00** |
+| Source origin | `com.garmin.android.apps.connectmobile` |
+| Eligibility | ELIGIBLE, brand unverified: no |
+| **Wear presence / ratio** | **yes / 100%** |
+| **State** | **MISSED** |
+| Integrity | OK |
+| Deviation | 90 min |
+| RHR nights available | 6, fallback not used |
+| Read errors | none |
 
-**AC-1 and the AC-10 Android half remain NOT MET.** A run that derives NO_DATA because of a
-paging bug is not a passing run, and I am not recording it as one. The gate is a run that
-produces a real KEPT or MISSED from a genuine night, with a non-zero wear ratio. That needs
-run 3.
+**Verdict**
+
+- **AC-1 MET.** Fresh install on a device with Tier-1 wearable data returned ELIGIBLE against
+  an allow-listed, now-verified source.
+- **AC-10, Android half MET.** The app runs on a physical Android device and a Health Connect
+  read fired; background read is granted and available on this OS.
+- **AC-10, iOS half DEFERRED** (D-013). Not attempted, not simulated, not inferred.
+
+**Why these numbers are trustworthy, not just green.** The reported state was re-derived
+independently from the harness's own inputs before being recorded here: a 23:46 sleep start
+against a 23:00 target is +46 min, an 08:00 wake against a 06:30 target is +90, both outside a
+30-minute tolerance, so spec §5 gives MISSED with `deviation_min = max(46, 90) = 90`. That is
+exactly what the device reported. The rows corroborate each other rather than merely being
+non-empty — which matters, because a passing screen was the failure mode in run 2.
+
+**The paging fix is confirmed on real data.** Run 2 read exactly 1000 samples spanning the
+wrong day; run 3 read 963 spanning 23:34 → 08:00, wholly containing the 23:46 → 08:00 main
+session, for 100% wear coverage. The sample count dropping below the cap and the two spans
+overlapping are the two independent signals that the scope-and-paginate fix works against
+Garmin's real write pattern, not just against fixtures.
 
 ---
 
@@ -510,3 +547,25 @@ likely candidate for the next surprise.
 samples read and of the selected main session. Had those two rows existed in run 2, the
 mismatch would have been obvious on sight instead of requiring the sample count to be
 recognised as a suspiciously round number.
+
+---
+
+## 13. Closing state of T-001
+
+Every deliverable is complete and every acceptance criterion in scope is met:
+
+| Criterion | State |
+|---|---|
+| AC-1 eligibility | **MET** (run 3) |
+| AC-2 derivation fixtures | **MET** — 21 cases, 9 AC-2 + 12 beyond |
+| AC-9 no raw health data on the wire | **MET** — whitelist plus a runtime guard, both tested |
+| AC-10 Android half | **MET** (run 3) |
+| AC-10 iOS half | **DEFERRED** (D-013) |
+| AC-3 RLS denial | **out of scope** — no backend exists in T-001 by instruction |
+
+Status set to **IN_REVIEW-COMPLETE**. Not DONE: per CLAUDE.md the checker marks DONE, and
+this report is the evidence for that decision, not a substitute for it.
+
+The three things I would want a reviewer to be sceptical about, in order: the D-020 SQLite
+write path has never executed anywhere (§6.3); run 3 is one night, one wearable, one timezone
+(§7); and the iOS bridge remains entirely unrun with D-018 unimplemented by ruling.
