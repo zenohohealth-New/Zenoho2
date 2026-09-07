@@ -72,15 +72,23 @@ Raw sleep sessions and HR samples never leave the phone by default. The phone co
 Why: DPDP Act 2023 minimisation; App Store 5.1.3 / Play health-data policy; smaller breach surface; and it makes the witness-sees-states rule structural, not a UI choice.
 Status: DECIDED
 
-## D-011 · 2026-09-07 · Technical Core (PROVISIONAL — founder may override)
+## D-011 · 2026-09-07 · Technical Core (confirmed by founder 2026-09-07)
 Client: Expo (React Native) with a custom dev client; `@kingstinct/react-native-healthkit` (iOS) + `react-native-health-connect` v4 (Android, ships its own Expo plugin; `expo-health-connect` is deprecated).
 Backend: one managed Postgres-with-auth service (Supabase-class BaaS), row-level security, edge/cron functions for weekly and cycle jobs, push via Expo Notifications. No custom server process in v1.
 Why: HealthKit/Health Connect are on-device APIs → a mobile app is unavoidable; a cross-platform framework halves the surface; Expo has mature bindings for both health stores; a BaaS removes ops for a solo founder. Rejected: native ×2 (two codebases), Flutter (`health` plugin abstraction is thinner on background delivery), cloud wearable aggregators (no need — data is already on the phone; adds cost and a third-party health-data custodian).
 Known constraints: Health Connect background reads need Android 15+ permission; else sync on foreground → design uses a morning push to trigger sync. Health Connect Play Console declaration: approval up to 7 days + 5–7 business days whitelist propagation → file in week 1. Default HC history = 30 days; request READ_HEALTH_DATA_HISTORY for baseline.
-Status: PROVISIONAL until founder confirms
+Status: DECIDED (confirmed by founder 2026-09-07)
 
 ## D-012 · 2026-09-07 · v1 scope = sleep commitment only
 Movement commitment deferred to v1.1 to keep the maker/checker loop short. One behaviour, one witness, one cycle.
+Status: DECIDED
+
+## D-013 · 2026-09-07 · Development environment and platform order
+Windows dev machine; Android-first; iOS via EAS cloud build + TestFlight once an Apple Developer account exists — iOS testing deferred.
+Status: DECIDED
+
+## D-014 · 2026-09-07 · First test device
+First test device: Samsung Galaxy S26 Ultra + Garmin Vívoactive 5, Garmin Connect → Health Connect, verified working by founder on 2026-09-07.
 Status: DECIDED
 
 ---

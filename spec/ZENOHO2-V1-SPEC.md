@@ -1,7 +1,7 @@
 # ZENOHO2 — V1 SPECIFICATION
 
 Version 1.0 · 2026-09-07 · Author: Claude Web (checker) · Owner: Founder
-Governing decisions: decisions/DECISIONS.md D-001 … D-012. Where this spec and the log disagree, the log wins.
+Governing decisions: decisions/DECISIONS.md D-001 … D-014. Where this spec and the log disagree, the log wins.
 
 ## 1. One-line product
 
@@ -137,7 +137,10 @@ AC-6 Cycle starts/ends per §6 across timezones; renewal carries commitment; edi
 AC-7 Delete account removes all rows within 72 h (test with job run); export produces JSON of the user's own rows.
 AC-8 Push volume ≤ 2/day/user in a simulated 28-day run.
 AC-9 No raw sleep or HR value appears in any network request (intercept test).
-AC-10 App runs on iOS + Android physical devices; background sync verified once per platform (report must say which device).
+AC-10 App runs on a physical Android device; Health Connect sync verified at least once (report must
+say which device and OS version). iOS half is DEFERRED per D-013 (Windows dev machine, no iPhone/Mac,
+no Apple Developer account): iOS code must compile, but no iOS device result may be claimed until an
+EAS cloud build reaches TestFlight on real hardware.
 
 ## 14. Non-functional
 

@@ -24,3 +24,10 @@ You are the MAKER for Zenoho2. Claude Web is the CHECKER. The founder is the app
 
 ## Current task
 tasks/T-001-foundation.md
+
+Closing block — mandatory at the end of every session
+Write the full report to the file as briefed. Your FINAL chat message must be ONLY these lines. No prose, no summary, no findings in chat.
+REPORT: reports/R-<nnn>-<name>.md
+HASH: <git sha> ls-remote MATCH: YES/NO/NO-REMOTE tree: clean/dirty
+GATES: derive a/b · netguard a/b · eligibility a/b · rls a/b/skip · lint · typecheck · build android · build ios/skip · device <model, OS> sync YES/NO
+WAITING: <n> decisions (one short line each, or NONE)
