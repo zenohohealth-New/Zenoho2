@@ -5,12 +5,18 @@ Spec sections read: §4, §5, §6, §8, §10, §11, §12 · Decisions: D-002, D-
 D-010, D-012, D-016, D-017, D-019, D-020, D-022, D-023, D-024
 Date: 2026-09-07
 
-> **Headline for the checker:** the engine is built and every gate is green — 99 tests,
-> typecheck clean, lint clean. **Nine of the ten acceptance criteria cannot be signed off from
-> this machine**, because they are device facts: AC-2.1 through AC-2.7 all say "on device" or
-> "prove by restart". The preview APK (D-023) is built; §9 stays open until it has been run.
-> Two real bugs were found and fixed on the way, both in code T-001 shipped as green — and
-> §12 adds the approved guard that would have caught them, verified by reproducing each.
+> **Headline for the checker:** the engine is built, every gate is green, and the preview APK
+> has been run on the S26 Ultra. **AC-2.1, AC-2.4 and AC-2.5 are MET on device.** AC-2.4 is the
+> one that matters most: the D-020 SQLite write path has now executed on real hardware, closing
+> the gap R-001 carried forward and R-002 called its largest risk.
+>
+> **AC-2.2 is NOT met — 6 nights with data against a target of ≥7.** The cause is not a defect
+> in the engine: Health Connect only holds ~6 nights of Garmin history on this device. That has
+> a consequence worth acting on, in §9.
+>
+> AC-2.7 is running overnight. AC-2.3 and AC-2.6 remain half-met — proven by test, device check
+> outstanding. Two real bugs were found and fixed on the way, both in code T-001 shipped as
+> green, and §12 adds the approved guard that would have caught them.
 
 ---
 
@@ -240,37 +246,83 @@ passing fixture.
 
 ## 9. Devices used (physical, with OS version)
 
-| Platform | Device | State |
+| Platform | Device | Build |
 |---|---|---|
-| Android | **Samsung Galaxy S26 Ultra**, Android 16 / One UI 8.5, build `BP4A.251205.006` (D-014) | **preview APK built, NOT YET RUN** |
+| Android | **Samsung Galaxy S26 Ultra**, Android 16 / One UI 8.5, build `BP4A.251205.006` (D-014) | preview APK **`69516f42`**, run 2026-09-07 |
 | iOS | none | **DEFERRED** (D-013) |
 
-**No T-002 device run has happened.** Nothing in this report claims one. Seven of the ten
-acceptance criteria are device facts and are therefore **open**:
+### Acceptance criteria against the device run
 
-| Criterion | State |
+| Criterion | Result |
 |---|---|
-| AC-2.1 commitment survives restart | **OPEN** — needs a restart on the phone |
-| AC-2.2 backfill ≥ 7 nights, with distribution | **OPEN** — needs the real Health Connect history |
-| AC-2.3 revise once before 14:00, frozen after | **half met** — proven by test; device check still to do |
-| AC-2.4 SQLite write path executes | **OPEN** — the harness toggle exists; nobody has pressed it |
-| AC-2.5 45-day retention | **half met** — proven by test; device probe still to do |
-| AC-2.6 no network in a full session | **half met** — static scan clean; runtime intercept still to do |
-| AC-2.7 preview APK works with the laptop off | **OPEN** |
-| AC-2.8 timezone mid-history | **described** (§8), with a real gap named |
+| **AC-2.1** commitment survives restart | **MET** — force-quit and reopen; the promise (23:00 / 07:00 / ±30) and the full history both survived. |
+| **AC-2.2** backfill ≥ 7 nights with data | **NOT MET — 6.** 31 rows stored; 6 carry real data (2–7 Sep, all MISSED), the remaining 25 are NO_DATA. See below. |
+| **AC-2.3** revise once before 14:00, frozen after | **half met** — proven by test; no device check performed. |
+| **AC-2.4** D-020 SQLite write path executes | **MET** — *Force D-017 fallback* → *Read again* gave `RHR nights available 1, RHR from fallback yes`. First execution of that code path anywhere. |
+| **AC-2.5** 45-day retention | **MET** — `31 → seeded 32 (2026-07-09) → purged 1 → 31`. |
+| **AC-2.6** no network in a full session | **half met** — static scan clean; runtime intercept not performed. |
+| **AC-2.7** preview APK, laptop off, morning notification | **PENDING** — running overnight. `Morning sync scheduled: 1` confirms exactly one trigger is armed, within spec §10's 2/day cap. |
+| **AC-2.8** timezone mid-history | **described** (§8), with a real gap named. |
+
+### AC-2.2 — the honest number, and what it means
+
+**6 nights with data, against a target of ≥ 7. Not met.** Recorded as a miss rather than
+rounded up.
+
+The engine did what it was asked. Row accounting confirms it: backfill covers the 30 nights
+*before* today, the caller derives today, and the retention probe independently reported 31
+rows — exactly 30 + 1. Nothing was lost or double-counted.
+
+The shortfall is upstream: **Health Connect only holds about 6 nights of Garmin history on this
+device**, despite `READ_HEALTH_DATA_HISTORY` being granted and the backfill asking for 30. Spec
+§12 anticipated a 30-day default; the reality here is a fifth of that. The 25 NO_DATA rows are
+therefore truthful — there was no data to read — not a failure to read it.
+
+**The consequence is the part that matters.** D-009 L3 needs **14** baseline nights before the
+coherence check can say anything at all. There are 6. So L3 stays dormant for roughly **8 more
+nights of wearing the watch**, and no amount of code closes that gap — only elapsed time does.
+This is exactly what D-024 reordered the plan to start: the clock is now running, and it was
+not running before today.
+
+### What the run also confirmed
+
+- The night re-derived correctly under the new commitment: session 23:46 → 08:00 against
+  23:00 / 07:00 gives bed +46, wake +60, so MISSED with `deviation_min = 60`. I re-derived this
+  from the harness inputs before recording it; the device's 60 matches, as does its MISSED. It
+  is a different number from R-001's 90 purely because the wake target moved from 06:30 to
+  07:00 — the same night, a different promise.
+- The paging fix continues to hold on real data: 963 samples, HR span 23:34 → 08:00 wholly
+  containing the 23:46 → 08:00 main session, wear ratio 100%, integrity OK.
+- Eligibility ELIGIBLE against the now-verified Garmin source.
+
+### T-002 open item: two sleep sessions per night — partly answered
+
+The device again read **2 sessions** for one night. The main session selected was
+23:46 → 08:00. The HR span begins at 23:34, and the engine scopes that read to the earliest
+session start, so **the unselected session began at 23:34** — a short fragment before the main
+sleep, most likely a brief settling or wake period Garmin recorded separately.
+
+§4's "longest eligible session" rule therefore picked the right one. **What is still not
+directly observed is the shorter session's end time**, since the harness prints only the
+selected session's span. That is a one-line harness addition if the checker wants it closed
+properly rather than inferred.
 
 ---
 
 ## 10. Risks
 
-- **The SQLite layer is now load-bearing and still unexecuted.** Every night the app records
-  goes through it. If migration 2 or either upsert is wrong, the failure mode is silent — an
-  empty history that looks like a member who simply has no data. AC-2.4's forced-fallback path
-  is the cheapest way to find out, and it takes one tap.
-- **The engine is only as good as one night of real input.** T-001's run 3 proved the read
-  path against a single Garmin night. Backfill will exercise it against 30 consecutive real
-  nights for the first time, including nights with no watch, partial wear, and possibly two
-  sessions. I expect that to surface something.
+- ~~The SQLite layer is load-bearing and unexecuted.~~ **CLOSED by AC-2.4 on device.** The
+  write path, the read-back and the retention `DELETE` have all now run on real hardware. This
+  had been carried since R-001 §6.3 and was the largest risk in the task.
+- **The L3 coherence check cannot fire for another ~8 nights.** Not a defect, but it means
+  D-009's third integrity layer is inert during the period when the founder is the only user —
+  precisely when a bug in it would be cheapest to find. Worth remembering before treating an
+  `integrity: OK` as evidence that L3 works.
+- **Backfill exercised the read path against 30 nights but only 6 with data.** The nights with
+  no watch are covered; partial wear and multi-session nights are still barely tested, because
+  only six real nights existed to test against. The next fortnight of ordinary use will be the
+  first broad exercise of the derivation, and is more likely to surface an edge case than any
+  test written from here.
 - **Three manifest-permission bugs in two tasks.** Each was invisible locally and fatal on
   device. Until a check exists that diffs intended permissions against the generated manifest,
   this will keep happening; it is a five-line test and I would rather be told to write it than
@@ -282,15 +334,16 @@ acceptance criteria are device facts and are therefore **open**:
 
 ## 11. Recommended next step
 
-1. **Run the preview APK and close §9.** In order: set a commitment, force-quit and reopen
-   (AC-2.1), read the backfill count and distribution (AC-2.2), tap *Force D-017 fallback* and
-   re-read to prove the SQLite write path (AC-2.4), tap *Test 45-day retention* (AC-2.5), and
-   leave it overnight for the morning notification (AC-2.7).
-2. **Report back the numbers, not a verdict** — row counts before and after, the state
-   distribution, and anything the harness printed. I will fill §9 from those.
+1. ~~Run the preview APK and close §9.~~ Done — §9 carries the numbers. Three criteria met on
+   device, one missed with the real figure recorded, one pending overnight, two half-met.
+2. **Confirm AC-2.7 in the morning** — whether the notification fired with the laptop off.
+   That is the last device fact T-002 is waiting on.
 3. **Run `npm run check:manifest`** whenever app.json, a config plugin or a native dependency
    changes, and before any build. It is deliberately outside `npm test` because it prebuilds.
-4. **T-003 (backend, schema, RLS)** — the checker writes that spec. Three things from T-002
+4. **Consider a device check for AC-2.3 and AC-2.6**, the two that remain half-met. AC-2.3
+   needs a night derived before and after 14:00 local; AC-2.6 needs a proxy or an intercept
+   during a full session. Neither is hard; both were simply not part of tonight's run.
+5. **T-003 (backend, schema, RLS)** — the checker writes that spec. Not started. Three things from T-002
    should feed into it: the sync path must treat a non-empty `readErrors` as unknown and never
    persist a failed read as NO_DATA; `daily_states` wants a timezone-offset column so D-016 can
    fire in the field (§8); and a manifest-permission check would have caught three bugs by now.
