@@ -17,6 +17,7 @@ import {
   readRhrRecords,
   type ReadRecordsFn,
 } from '../app/src/health/healthConnectMapping';
+import { wearPresence } from '../app/src/derive/wear';
 
 const START = Date.parse('2026-09-06T17:40:00Z');
 const END = Date.parse('2026-09-07T01:05:00Z');
@@ -209,5 +210,157 @@ describe('Health Connect reads are isolated from one another', () => {
     const nowMs = Date.parse('2026-09-07T06:00:00Z');
     const rhr = await readRhrRecords(readRecordsThatFails(null), 45, 330, nowMs);
     expect(rhr).toEqual([{ nightDate: '2026-09-07', restingBpm: 52 }]);
+  });
+});
+
+describe('heart rate is read for the sleep session, not the whole window', () => {
+  /**
+   * Regression for R-001 device run 2 (S26 Ultra, 2026-09-07): the harness read
+   * exactly 1000 heart-rate samples and still reported a 0% wear ratio.
+   *
+   * Health Connect caps one read at 1000 records and returns them oldest-first,
+   * so an unpaginated read of the 36-hour window returned samples from the day
+   * BEFORE the night, none of which overlapped the sleep session.
+   */
+  const SESSION_START = Date.parse('2026-09-06T17:40:00Z'); // 23:10 IST
+  const SESSION_END = Date.parse('2026-09-07T01:05:00Z'); // 06:35 IST
+
+  function hrRecordsBetween(fromMs: number, toMs: number, everyMin: number) {
+    const samples = [];
+    for (let t = fromMs; t < toMs; t += everyMin * 60_000) {
+      samples.push({ time: new Date(t).toISOString(), beatsPerMinute: 58 });
+    }
+    return [
+      {
+        metadata: {
+          dataOrigin: 'com.garmin.android.apps.connectmobile',
+          recordingMethod: 2,
+        },
+        samples,
+      },
+    ];
+  }
+
+  /**
+   * Mimics Health Connect: honours the requested range, returns at most
+   * `pageSize` records oldest-first, and hands back a pageToken when more remain.
+   */
+  function pagingReadRecords(everyMin: number): ReadRecordsFn {
+    return async (recordType, options) => {
+      if (recordType === 'SleepSession') {
+        return {
+          records: [
+            {
+              startTime: new Date(SESSION_START).toISOString(),
+              endTime: new Date(SESSION_END).toISOString(),
+              metadata: {
+                dataOrigin: 'com.garmin.android.apps.connectmobile',
+                recordingMethod: 2,
+              },
+            },
+          ],
+        };
+      }
+      if (recordType !== 'HeartRate') return { records: [] };
+
+      const from = Date.parse(options.timeRangeFilter.startTime);
+      const to = Date.parse(options.timeRangeFilter.endTime);
+      const all = hrRecordsBetween(from, to, everyMin)[0].samples;
+
+      const offset = options.pageToken ? Number(options.pageToken) : 0;
+      const size = options.pageSize ?? 1000;
+      const page = all.slice(offset, offset + size);
+      const next = offset + size < all.length ? String(offset + size) : undefined;
+
+      return {
+        records: [
+          {
+            metadata: {
+              dataOrigin: 'com.garmin.android.apps.connectmobile',
+              recordingMethod: 2,
+            },
+            samples: page,
+          },
+        ],
+        pageToken: next,
+      };
+    };
+  }
+
+  it('returns heart rate that actually overlaps the session', async () => {
+    // One sample a minute across a 36h window is far past the 1000 cap, which is
+    // what the device hit. Before the fix, every sample came back from the wrong day.
+    const r = await readNightRecords(pagingReadRecords(1), '2026-09-07', 330);
+
+    expect(r.sessions).toHaveLength(1);
+    expect(r.hr.length).toBeGreaterThan(0);
+
+    const inSession = r.hr.filter(
+      (h) => h.atMs >= SESSION_START && h.atMs < SESSION_END,
+    );
+    expect(inSession.length).toBeGreaterThan(0);
+    // The point of the fix: essentially everything read is inside the session.
+    expect(inSession.length).toBe(r.hr.length);
+  });
+
+  it('the samples cover the session densely enough to prove wear', async () => {
+    const r = await readNightRecords(pagingReadRecords(1), '2026-09-07', 330);
+    const w = wearPresence(r.hr, SESSION_START, SESSION_END);
+
+    expect(w.ratio).toBe(1);
+    expect(w.present).toBe(true);
+  });
+
+  it('paginates rather than stopping at the first page', async () => {
+    // 5h25m of one-per-minute samples inside the session is 445 -- under the cap.
+    // Force paging by shrinking the page size through a sparse-window read.
+    const calls: (string | undefined)[] = [];
+    const counting: ReadRecordsFn = async (recordType, options) => {
+      const inner = pagingReadRecords(1);
+      if (recordType === 'HeartRate') calls.push(options.pageToken);
+      return inner(recordType, { ...options, pageSize: 100 });
+    };
+
+    const r = await readNightRecords(counting, '2026-09-07', 330);
+    expect(calls.length).toBeGreaterThan(1);
+    expect(calls[0]).toBeUndefined();
+    // 445 minutes of samples at 100 per page.
+    expect(r.hr.length).toBe(445);
+  });
+
+  it('a night whose heart rate sits outside the session still reads NO_WEAR', async () => {
+    // The honest negative: HR exists in the 36h window but none of it is in the
+    // session. Scoping must not invent coverage that is not there.
+    const hrElsewhere: ReadRecordsFn = async (recordType) => {
+      if (recordType === 'SleepSession') {
+        return {
+          records: [
+            {
+              startTime: new Date(SESSION_START).toISOString(),
+              endTime: new Date(SESSION_END).toISOString(),
+              metadata: {
+                dataOrigin: 'com.garmin.android.apps.connectmobile',
+                recordingMethod: 2,
+              },
+            },
+          ],
+        };
+      }
+      if (recordType === 'HeartRate') {
+        return {
+          records: hrRecordsBetween(
+            SESSION_START - 6 * 60 * 60_000,
+            SESSION_START - 60_000,
+            1,
+          ),
+        };
+      }
+      return { records: [] };
+    };
+
+    const r = await readNightRecords(hrElsewhere, '2026-09-07', 330);
+    const w = wearPresence(r.hr, SESSION_START, SESSION_END);
+    expect(w.present).toBe(false);
+    expect(w.ratio).toBe(0);
   });
 });

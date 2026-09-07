@@ -49,8 +49,46 @@ export interface HcRestingHeartRateRecord {
 /** The shape of `readRecords` from react-native-health-connect, narrowed. */
 export type ReadRecordsFn = (
   recordType: string,
-  options: { timeRangeFilter: { operator: 'between'; startTime: string; endTime: string } },
-) => Promise<{ records: unknown[] }>;
+  options: {
+    timeRangeFilter: { operator: 'between'; startTime: string; endTime: string };
+    pageSize?: number;
+    pageToken?: string;
+  },
+) => Promise<{ records: unknown[]; pageToken?: string }>;
+
+/**
+ * Health Connect caps a single read at 1000 records and returns them in
+ * ascending time order, so an unpaginated read of a 36-hour window returns the
+ * OLDEST 1000 samples — which on a device with continuous heart rate is the day
+ * before the night in question. That is what produced a 0% wear ratio against
+ * 1000 samples on the S26 Ultra on 2026-09-07.
+ */
+export const HC_PAGE_SIZE = 1000;
+
+/** Guards against an unbounded loop if a provider ever returns a stable token. */
+export const HC_MAX_PAGES = 50;
+
+/** Read every page for a record type, not just the first. */
+async function readAllPages(
+  readRecords: ReadRecordsFn,
+  recordType: string,
+  timeRangeFilter: { operator: 'between'; startTime: string; endTime: string },
+): Promise<unknown[]> {
+  const all: unknown[] = [];
+  let pageToken: string | undefined;
+
+  for (let page = 0; page < HC_MAX_PAGES; page += 1) {
+    const result = await readRecords(recordType, {
+      timeRangeFilter,
+      pageSize: HC_PAGE_SIZE,
+      pageToken,
+    });
+    all.push(...result.records);
+    if (!result.pageToken || result.records.length === 0) return all;
+    pageToken = result.pageToken;
+  }
+  return all;
+}
 
 export function mapRecordingMethod(m: number | undefined): RecordingMethod {
   switch (m) {
@@ -92,8 +130,8 @@ export async function readNightRecords(
 
   let sessions: SleepSession[] = [];
   try {
-    const sleep = await readRecords('SleepSession', { timeRangeFilter });
-    sessions = (sleep.records as HcSleepRecord[]).map((r) => ({
+    const sleepRecords = await readAllPages(readRecords, 'SleepSession', timeRangeFilter);
+    sessions = (sleepRecords as HcSleepRecord[]).map((r) => ({
       // dataOrigin is the D-009 L1 evidence; keep it verbatim, never normalise.
       sourceId: r.metadata?.dataOrigin ?? '',
       startMs: Date.parse(r.startTime),
@@ -104,10 +142,23 @@ export async function readNightRecords(
     readErrors.push({ kind: 'sleep', message: describe(e) });
   }
 
+  // Scope the heart-rate read to the sessions we actually found. Wear presence
+  // only ever looks inside a sleep session, so reading the whole 36-hour window
+  // buys nothing and costs the page cap above. Falls back to the full window when
+  // there are no sessions, so eligibility still has heart rate to look at.
+  const hrRange =
+    sessions.length > 0
+      ? {
+          operator: 'between' as const,
+          startTime: toIso(Math.min(...sessions.map((x) => x.startMs))),
+          endTime: toIso(Math.max(...sessions.map((x) => x.endMs))),
+        }
+      : timeRangeFilter;
+
   const hr: HrSample[] = [];
   try {
-    const heart = await readRecords('HeartRate', { timeRangeFilter });
-    for (const record of heart.records as HcHeartRateRecord[]) {
+    const heartRecords = await readAllPages(readRecords, 'HeartRate', hrRange);
+    for (const record of heartRecords as HcHeartRateRecord[]) {
       const sourceId = record.metadata?.dataOrigin ?? '';
       // D-019: provenance rides along on every sample so a phone-written or
       // manually entered heart rate cannot satisfy the wear-time check.
@@ -145,17 +196,15 @@ export async function readRhrRecords(
 ): Promise<RhrNight[]> {
   try {
     const startMs = nowMs - days * 24 * 60 * 60_000;
-    const result = await readRecords('RestingHeartRate', {
-      timeRangeFilter: {
-        operator: 'between',
-        startTime: toIso(startMs),
-        endTime: toIso(nowMs),
-      },
+    const records = await readAllPages(readRecords, 'RestingHeartRate', {
+      operator: 'between',
+      startTime: toIso(startMs),
+      endTime: toIso(nowMs),
     });
 
     // One value per night: Health Connect may hold several, so keep the last.
     const byNight = new Map<string, number>();
-    for (const record of result.records as HcRestingHeartRateRecord[]) {
+    for (const record of records as HcRestingHeartRateRecord[]) {
       if (mapRecordingMethod(record.metadata?.recordingMethod) === 'MANUAL') continue;
       byNight.set(localDateKey(Date.parse(record.time), tzOffsetMin), record.beatsPerMinute);
     }

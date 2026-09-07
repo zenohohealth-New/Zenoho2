@@ -114,8 +114,11 @@ percentile of heart rate inside the sleep window and persisted locally.
 Why: D-009 L3 needs a 30-night RHR baseline, but `readNight` returns only sessions plus HR,
 and raw samples are purged at 45 days — so the baseline cannot be rebuilt from raw data.
 D-010 is unchanged: RHR values and baselines never leave the device.
-Open: which local persistence engine holds the derived history. `mergeRhrNight` fixes the
-shape and retention; the durable store lands in T-002.
+Resolved by D-020: `expo-sqlite` holds the derived history.
+Evidence (R-001 device run 2, S26 Ultra, 2026-09-07): Garmin Connect DOES write
+`RestingHeartRateRecord` to Health Connect — 6 nights were read directly and the fallback was
+not used. So the fallback is unnecessary for Garmin specifically. It stays for brands that
+write no resting heart rate, and because the 30-night L3 baseline has to survive gaps.
 Status: DECIDED
 
 ## D-018 · 2026-09-07 · iOS eligibility keys on the source device model, not the bundle id
@@ -155,6 +158,11 @@ Status: DECIDED
 ---
 
 ## OPEN ITEMS (blocked on a device, not on a person)
+- CLOSED 2026-09-07 (R-001 run 2, S26 Ultra + Vívoactive 5): Garmin Connect Android writes
+  sleep, heart rate AND resting heart rate to Health Connect. Observed dataOrigin is
+  `com.garmin.android.apps.connectmobile`; allow-list v2 marks it verified.
+- CLOSED 2026-09-07 (same run): Health Connect background read IS available and was granted on
+  Android 16 / One UI 8.5. Spec §12's "Android 15+" note holds.
 - Verify: Fire-Boltt → HealthKit / Health Connect sleep write.
 - Verify: boAt / Noise → Health Connect sleep write (Android).
 - Verify: Ultrahuman → Health Connect.

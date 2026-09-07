@@ -14,6 +14,10 @@ Date: 2026-09-07 · Revised 2026-09-07 after checker review (code PASS, device e
 > and `expo lint` are in. Section 9 is deliberately untouched — it stays as it is until the
 > phone screenshot exists. Section 10 records what happened with the hook removal.
 >
+> **Third revision:** two device runs have now happened; §9 carries the device, its OS and
+> a run log. Both original T-001 open items are closed by real observation. The Android
+> acceptance gate is still not met — see §9 and §12.
+>
 > **Second revision:** D-015 recorded, D-020 (expo-sqlite) implemented, D-019 clarified.
 > **Correction:** the previous revision reported "lint clean" on the strength of
 > `npx expo lint`, which exits 0 without linting anything in this project. The gate was a
@@ -146,6 +150,9 @@ feat(app): T-001 device harness screen and EAS build profiles
 docs: R-001 implementation report; T-001 IN_REVIEW
 fix(derive): rulings D-016-D-019; build props; lint
 fix: D-015 recorded, D-020 sqlite store, D-019 clarified
+fix(health): add READ_RESTING_HEART_RATE, isolate reads, degrade RHR failures
+chore(app): link EAS project (owner zenoho-expo-new)
+fix(health): scope HR read to the sleep session and paginate; allow-list v2
 ```
 
 ---
@@ -154,10 +161,10 @@ fix: D-015 recorded, D-020 sqlite store, D-019 clarified
 
 | Gate | Command | Result |
 |---|---|---|
-| Unit + fixtures | `npm test` (vitest) | **69/69 passed**, 5 files |
+| Unit + fixtures | `npm test` (vitest) | **82/82 passed**, 6 files |
 | Typecheck | `npx tsc --noEmit` | **clean**, 0 errors — covers `app/src` (both platform bridges) and `tests/` |
 | Native config | `npx expo prebuild --platform android --clean` | **succeeded**; manifest and `minSdkVersion=28` inspected |
-| Android build | — | **NOT RUN** (no JDK / Android SDK / adb; EAS not logged in) |
+| Android build | `eas build --profile development --platform android` | **SUCCEEDED** (`0d617dfd`), installed and run on the S26 Ultra |
 | iOS build | — | **SKIPPED** by D-013 |
 | RLS denial (AC-3) | — | **SKIPPED**; no backend exists in T-001 by instruction |
 | Lint | `npm run lint` (`eslint .`) | **clean**, 0 errors 0 warnings — see the correction below |
@@ -377,55 +384,39 @@ deny.
 
 ## 9. Devices used (physical, with OS version)
 
-| Platform | Device | Build installed | Health read fired | Background delivery |
-|---|---|---|---|---|
-| Android | **Samsung Galaxy S26 Ultra + Garmin Vívoactive 5** (D-014) | **NO** | **NO** | **NO** |
-| iOS | none | **DEFERRED** (D-013) | **DEFERRED** | **DEFERRED** |
+**Device under test (D-014)**
 
-**No physical device was used in T-001. Nothing was run on the S26 Ultra. No result in this
-report is derived from real device data, and none is inferred, estimated or simulated as if
-it were.** The Android row is a blocker, not a pass.
+| | |
+|---|---|
+| Phone | **Samsung Galaxy S26 Ultra** |
+| OS | **Android 16, One UI 8.5**, build `BP4A.251205.006`, security patch 2026-07-05 |
+| Wearable | **Garmin Vívoactive 5** via Garmin Connect → Health Connect |
+| iOS | none — **DEFERRED** (D-013). No result will be entered here that did not come off real hardware. |
 
-Why: this Windows machine has no JDK, no Android SDK and no `adb`, so `expo run:android`
-cannot produce an APK locally; and `eas-cli whoami` reports "Not logged in", so the cloud
-build cannot start either. The OS version of the S26 Ultra is likewise unrecorded — it must
-be read off the device, not assumed. Per D-013 no iOS device, Mac or Apple Developer account
-exists, so the iOS row stays DEFERRED and will not be filled with anything but a real result.
+**Run log**
 
----
+| Run | Build | Outcome |
+|---|---|---|
+| 1 | first dev APK | **FAILED.** `SecurityException: Caller requires android.permission.health.READ_RESTING_HEART_RATE`. The manifest lacked the permission, and the unguarded read took the whole probe down: every row showed "—". |
+| 2 | `0d617dfd` | **PARTIAL.** Reads succeeded — 2 sleep sessions, 1000 HR samples, origin `com.garmin.android.apps.connectmobile`, eligibility ELIGIBLE, background read granted, 6 nights of RHR read directly. But wear ratio was **0%**, so the night derived as NO_DATA / NO_WEAR. Diagnosed as the Health Connect 1000-record page cap: the read returned the oldest samples in the 36-hour window, none of which overlapped the session. Fixed and regression-tested; not yet re-run. |
+| 3 | — | **NOT YET RUN.** JS-only change; reloads over the dev server. |
 
-## Blocked on founder action
+**What run 2 did establish, as fact rather than inference**
 
-Two things need you. Both are quick; the second is the one that matters.
+- Health Connect is reachable from the app on this device, and the permission flow works.
+- Background read is **granted and available on Android 16 / One UI 8.5** — closing the first
+  of T-001's two original open items.
+- The real Android dataOrigin for Garmin is `com.garmin.android.apps.connectmobile` — closing
+  the second. Allow-list v2 marks it `verified: true` with this run as evidence. Every other
+  identifier in that file remains unverified.
+- Garmin **does** write `RestingHeartRateRecord`: 6 nights were read directly and the D-017
+  fallback was not used. The fallback is therefore unnecessary for Garmin, and is retained
+  only for brands that write no resting heart rate.
 
-**A · Log into EAS so I can build the APK.** Run this in your terminal and follow the
-prompts (it asks for your Expo username/email and password):
-
-```bash
-npx eas-cli login
-```
-
-If you have no Expo account yet, create one at expo.dev first — it is free, and the
-development-profile Android build fits in the free tier. Tell me when `npx eas-cli whoami`
-prints your username, and I will start the build.
-
-**B · Install the APK on the S26 Ultra and read the screen.** After A, I will run the build
-and give you a download link. Then, on the phone:
-
-1. Open the link in Chrome → **Download** → open the file → **Install**.
-   If Android says "Install unknown apps", tap **Settings** → toggle **Allow from this
-   source** → back → **Install**.
-2. Open **Zenoho2**. It runs the probe automatically.
-3. Health Connect shows a permission sheet. Tap **Allow all**, then **Allow**.
-   If it separately asks about background access, tap **Allow all the time**.
-4. If a screen says Health Connect is not set up, open the **Health Connect** app first,
-   confirm **Garmin Connect** appears under *App permissions* with Sleep and Heart rate on,
-   then reopen Zenoho2 and tap **Read again**.
-5. **Screenshot the whole screen** and send it to me, and also tell me the phone's Android
-   version (**Settings → About phone → Software information → Android version**).
-
-That screenshot is the evidence section 9 is missing. Nothing else in T-001 is waiting on
-anything.
+**AC-1 and the AC-10 Android half remain NOT MET.** A run that derives NO_DATA because of a
+paging bug is not a passing run, and I am not recording it as one. The gate is a run that
+produces a real KEPT or MISSED from a genuine night, with a non-zero wear ratio. That needs
+run 3.
 
 ---
 
@@ -481,3 +472,41 @@ verified by watching it fail: a deliberately violating import made the gate exit
 `no-restricted-imports`, and reverting it returned the gate to green. I have not applied that
 standard retroactively to the test and typecheck gates, though both have failed and been fixed
 during this task, which is the same evidence by a different route.
+
+---
+
+## 12. Device run 2 — what broke and what it cost
+
+Run 2 read 1000 heart-rate samples and still reported a 0% wear ratio. Exactly 1000 was the
+tell: Health Connect caps a single read at 1000 records and returns them oldest-first, so an
+unpaginated read of the 36-hour window returned samples from the day *before* the night. None
+overlapped the sleep session, so wear presence was legitimately 0 — the derivation was right
+about the data it was given, and the data was wrong.
+
+Two fixes, both in `healthConnectMapping.ts`:
+
+- **Scope**: heart rate is now read for the span of the sessions actually returned, not the
+  whole window. Wear presence only ever looks inside a session, so the wider read bought
+  nothing and cost the cap. It falls back to the full window when there are no sessions, so
+  eligibility still has heart rate to inspect.
+- **Paginate**: `readAllPages` follows `pageToken` for sleep, heart rate and resting heart
+  rate, with a 50-page ceiling so a misbehaving provider cannot spin forever.
+
+`tests/read-isolation.test.ts` gained four cases, including one where heart rate exists in the
+window but entirely outside the session — the honest negative, proving the scoping does not
+invent coverage. **These were verified against the pre-fix code**: reverting the scope-and-
+paginate change makes three of them fail, and restoring it makes them pass. A regression test
+that has never seen the bug is a guess.
+
+**What this cost, and the pattern behind it.** Two device runs, two failures, both of them
+integration facts that no amount of local reasoning would have surfaced: an undeclared manifest
+permission, and a platform paging default. Both were invisible to a green test suite, a clean
+typecheck and a successful prebuild. That is the concrete form of the risk this report has been
+flagging since the first revision — unexecuted code accumulating faster than it can be
+exercised. The SQLite layer (D-020) is still in that category and has never run; it is the most
+likely candidate for the next surprise.
+
+**Harness additions for run 3**: the screen now prints the local-time span of the heart-rate
+samples read and of the selected main session. Had those two rows existed in run 2, the
+mismatch would have been obvious on sight instead of requiring the sample count to be
+recognised as a suspiciously round number.

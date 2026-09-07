@@ -7,7 +7,7 @@
  *              carries integrity=UNVERIFIED so a new brand is not silently excluded
  *   BLOCKED  - phone OS writer, or a manually entered session
  */
-import allowlist from './source-allowlist.v1.json';
+import allowlist from './source-allowlist.v2.json';
 import type { RecordingMethod, SleepSession } from '../derive/types';
 
 export type Platform = 'android' | 'ios';

@@ -1,14 +1,15 @@
 {
-  "version": 1,
+  "version": 2,
   "specSection": "spec/ZENOHO2-V1-SPEC.md §9",
   "generatedOn": "2026-09-07",
   "note": [
-    "IDENTIFIER STRINGS BELOW ARE UNVERIFIED. Spec §9 names brands, not package ids.",
-    "Every entry has verified=false until the string is observed coming out of a real",
-    "device and recorded in a report (T-001 open item). An unverified-but-listed brand",
-    "still behaves as ALLOWED; the risk is a wrong string silently failing to match,",
-    "which degrades to UNKNOWN -> integrity UNVERIFIED, never to a false KEPT.",
-    "D-019: this classification also gates heart rate. A sample only counts towards wear presence if its own source passes here, so phone or manual HR cannot satisfy D-009 L2."
+    "MOST IDENTIFIER STRINGS BELOW ARE STILL UNVERIFIED. Spec section 9 names brands, not",
+    "package ids. An entry stays verified=false until the string is observed coming out of a",
+    "real device and recorded in a report. An unverified-but-listed brand still behaves as",
+    "ALLOWED; the risk is a wrong string failing to match, which degrades to UNKNOWN ->",
+    "integrity UNVERIFIED, never to a false KEPT.",
+    "D-019: this classification also gates heart rate. A sample only counts towards wear",
+    "presence if its own source passes here, so phone or manual HR cannot satisfy D-009 L2."
   ],
   "android": {
     "allow": [
@@ -21,8 +22,8 @@
       {
         "package": "com.garmin.android.apps.connectmobile",
         "brand": "Garmin Connect",
-        "verified": false,
-        "evidence": "D-014 device pair; string not yet observed in code"
+        "verified": true,
+        "evidence": "observed on S26 Ultra, R-001 device run 2, 2026-09-07"
       },
       {
         "package": "com.fitbit.FitbitMobile",
@@ -157,7 +158,7 @@
     "block": []
   },
   "openQuestions": [
-    "RESOLVED by D-018: iOS eligibility keys on the HealthKit source device model containing 'Watch', not on the com.apple.health bundle id, which covers iPhone-only sleep too. Implementation deferred until iOS work resumes (D-013); the ios.allow entry below is therefore necessary but not sufficient on its own.",
-    "Every identifier string in this file is still unobserved. Confirm each against a real device before beta and promote it to verified=true with evidence."
+    "RESOLVED by D-018: iOS eligibility keys on the HealthKit source device model containing 'Watch', not on the com.apple.health bundle id, which covers iPhone-only sleep too. Implementation deferred until iOS work resumes (D-013); the ios.allow entry is therefore necessary but not sufficient on its own.",
+    "Every identifier string except Garmin Connect on Android is still unobserved. Confirm each against a real device before beta and promote it to verified=true with evidence."
   ]
 }

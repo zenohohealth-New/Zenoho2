@@ -75,7 +75,7 @@ describe('AC-1 — eligibility', () => {
 
 describe('§9 — source classification', () => {
   it('exposes a version so the allow-list can be rolled forward by evidence', () => {
-    expect(ALLOWLIST_VERSION).toBe(1);
+    expect(ALLOWLIST_VERSION).toBe(2);
   });
 
   it('classifies Android packages by exact match', () => {

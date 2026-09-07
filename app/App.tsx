@@ -22,6 +22,7 @@ import { StatusBar } from 'expo-status-bar';
 import {
   deriveDailyState,
   localDateKey,
+  localMinuteOfDay,
   selectMainSession,
   type DeriveResult,
 } from './src/derive';
@@ -65,6 +66,13 @@ interface Probe {
   rhrFallback: boolean | null;
   /** Reads that failed. A failed read is not the same fact as an empty night. */
   readErrors: ReadIssue[];
+  /**
+   * Local-time spans, for diagnosing coverage gaps like the 2026-09-07 page-cap
+   * bug where 1000 samples sat entirely outside the session. Device-only: these
+   * are raw health timestamps and must never be uploaded (D-010).
+   */
+  hrSpan: string | null;
+  sessionSpan: string | null;
   error: string | null;
 }
 
@@ -81,6 +89,8 @@ const EMPTY: Probe = {
   rhrNights: null,
   rhrFallback: null,
   readErrors: [],
+  hrSpan: null,
+  sessionSpan: null,
   error: null,
 };
 
@@ -128,6 +138,12 @@ export default function App() {
         main?.session.endMs ?? null,
       );
 
+      const hrSpan = spanOf(hr.map((h) => h.atMs), tzOffsetMin);
+      const sessionSpan =
+        main === null
+          ? null
+          : spanOf([main.session.startMs, main.session.endMs], tzOffsetMin);
+
       const derived = deriveDailyState(
         {
           nightDate,
@@ -153,6 +169,8 @@ export default function App() {
         derived,
         rhrNights: rhr.history.length,
         rhrFallback: rhr.usedFallback,
+        hrSpan,
+        sessionSpan,
         readErrors: rhr.storeError === null
           ? readErrors
           : [...readErrors, { kind: 'rhr' as const, message: rhr.storeError }],
@@ -204,6 +222,8 @@ export default function App() {
         <Row label="Night date" value={probe.nightDate ?? '—'} />
         <Row label="Sleep sessions read" value={fmt(probe.sessionCount)} />
         <Row label="HR samples read" value={fmt(probe.hrCount)} />
+        <Row label="HR span (local)" value={probe.hrSpan ?? '—'} />
+        <Row label="Main session (local)" value={probe.sessionSpan ?? '—'} />
 
         <Text style={styles.h2}>Source origins seen</Text>
         {probe.origins.length === 0 ? (
@@ -276,6 +296,23 @@ export default function App() {
       </ScrollView>
     </View>
   );
+}
+
+/**
+ * Local `HH:MM -> HH:MM` for a set of instants, so a coverage gap is visible at a
+ * glance. Stays on the device; never part of any payload (D-010).
+ */
+function spanOf(instants: number[], tzOffsetMin: number): string | null {
+  if (instants.length === 0) return null;
+  const hhmm = (ms: number) => {
+    const m = localMinuteOfDay(ms, tzOffsetMin);
+    return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+  };
+  const lo = Math.min(...instants);
+  const hi = Math.max(...instants);
+  const days = Math.round((hi - lo) / 86_400_000);
+  const suffix = days > 0 ? ` (+${days}d)` : '';
+  return `${hhmm(lo)} → ${hhmm(hi)}${suffix}`;
 }
 
 function fmt(v: boolean | number | null | undefined): string {
