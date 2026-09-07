@@ -1,6 +1,9 @@
 # T-001 · Foundation: repo, health-store bridge, on-device derivation
 
-Status: READY · Owner: Claude Code (maker) · Reviewer: Claude Web (checker) · Approver: Founder
+Status: IN_REVIEW · Owner: Claude Code (maker) · Reviewer: Claude Web (checker) · Approver: Founder
+Report: reports/R-001-foundation.md (2026-09-07). Deliverables 1-6 complete; device
+evidence for AC-1 and the AC-10 Android half is NOT met - nothing has run on a phone.
+Only the checker marks this DONE.
 Spec: spec/ZENOHO2-V1-SPEC.md §4, §5, §9, §12, §13 (AC-1, AC-2, AC-9, AC-10 Android half)
 Decisions: D-003, D-009, D-010, D-011, D-012, D-013, D-014
 
