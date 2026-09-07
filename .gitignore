@@ -1,0 +1,75 @@
+# --- Dependencies ---
+node_modules/
+.pnp/
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/releases
+!.yarn/plugins
+!.yarn/sdks
+!.yarn/versions
+
+# --- Expo ---
+.expo/
+.expo-shared/
+dist/
+web-build/
+expo-env.d.ts
+
+# --- Native builds (managed workflow prebuild output) ---
+ios/
+android/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+
+# --- EAS ---
+.easignore
+
+# --- Metro ---
+.metro-health-check*
+.metro-cache/
+
+# --- Build / transpile output ---
+build/
+lib/
+*.tsbuildinfo
+
+# --- Testing / coverage ---
+coverage/
+.nyc_output/
+
+# --- Secrets & environment (D: secrets only via env, never committed) ---
+.env
+.env.*
+!.env.example
+*.pem
+secrets/
+
+# --- Supabase local ---
+.branches/
+.temp/
+supabase/.temp/
+
+# --- Logs ---
+*.log
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+logs/
+
+# --- Editors / OS ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+
+# --- Caches ---
+.cache/
+.eslintcache
+.turbo/
