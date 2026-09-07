@@ -7,11 +7,12 @@ import { circularDiffMin, localMinuteOfDay, roundTo5 } from './time';
 import { selectMainSession } from './session';
 import { wearPresence } from './wear';
 import { rhrCoherence } from './rhr';
-import type { Platform } from '../eligibility';
+import { classifySource, type Platform } from '../eligibility';
 import type {
   DailyStateValue,
   DeriveInput,
   DerivedNight,
+  HrSample,
   IntegrityFlag,
 } from './types';
 
@@ -92,9 +93,15 @@ export function deriveDailyState(
 
   const { session, verdict } = pick;
 
-  // §9: unknown origin is admitted only when HR backs it up; the wear check below
-  // enforces that, since an unknown source with no HR cannot reach 70% coverage.
-  const wear = wearPresence(hr, session.startMs, session.endMs);
+  // D-019: only HR from a source that is not blocked may prove wear time, so a
+  // phone-written or manually entered heart rate cannot satisfy L2. Unknown
+  // brands still count, preserving §9's rule that a new brand is flagged rather
+  // than silently excluded.
+  const acceptHrSource = (sample: HrSample) =>
+    classifySource(sample.sourceId, sample.recordingMethod, platform).sourceClass !==
+    'BLOCKED';
+
+  const wear = wearPresence(hr, session.startMs, session.endMs, acceptHrSource);
   if (!wear.present) {
     return noDataResult(nightDate, 'NO_WEAR', 'NO_DATA', session.sourceId, computedAt, wear.ratio);
   }

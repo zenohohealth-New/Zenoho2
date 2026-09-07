@@ -19,13 +19,20 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 
-import { deriveDailyState, localDateKey, type DeriveResult } from './src/derive';
+import {
+  deriveDailyState,
+  localDateKey,
+  selectMainSession,
+  type DeriveResult,
+} from './src/derive';
 import {
   checkEligibility,
   NO_WEARABLE_COPY,
   type EligibilityResult,
 } from './src/eligibility';
 import { getHealthStore, type PermissionOutcome } from './src/health';
+import { loadRhrHistory } from './src/health/rhrHistory';
+import { InMemoryRhrHistoryStore } from './src/storage/rhrStore';
 
 /** Placeholder commitment for T-001: 23:00 to 06:30, 30-minute tolerance. */
 const TRIAL_COMMITMENT = {
@@ -33,6 +40,12 @@ const TRIAL_COMMITMENT = {
   wakeTargetMin: 6 * 60 + 30,
   toleranceMin: 30,
 } as const;
+
+/**
+ * D-017 local RHR history. In-memory for now, so it resets with the app; the
+ * durable store lands in T-002 (see src/storage/rhrStore.ts).
+ */
+const rhrLocalStore = new InMemoryRhrHistoryStore();
 
 interface Probe {
   available: boolean | null;
@@ -45,6 +58,10 @@ interface Probe {
   origins: string[];
   eligibility: EligibilityResult | null;
   derived: DeriveResult | null;
+  /** D-017: how many nights of RHR history L3 had to work with. */
+  rhrNights: number | null;
+  /** D-017: true when RHR came from the on-device percentile, not the store. */
+  rhrFallback: boolean | null;
   error: string | null;
 }
 
@@ -58,6 +75,8 @@ const EMPTY: Probe = {
   origins: [],
   eligibility: null,
   derived: null,
+  rhrNights: null,
+  rhrFallback: null,
   error: null,
 };
 
@@ -95,6 +114,20 @@ export default function App() {
       ).filter(Boolean);
 
       const eligibility = checkEligibility(sessions, hr, store.platform, now);
+
+      // D-017: L3 needs an RHR history. Prefer the store's own resting-heart-rate
+      // records; otherwise derive tonight's from the sleep window and keep it locally.
+      const main = selectMainSession(sessions, nightDate, tzOffsetMin, store.platform);
+      const rhr = await loadRhrHistory(
+        store,
+        rhrLocalStore,
+        nightDate,
+        tzOffsetMin,
+        hr,
+        main?.session.startMs ?? null,
+        main?.session.endMs ?? null,
+      );
+
       const derived = deriveDailyState(
         {
           nightDate,
@@ -102,6 +135,7 @@ export default function App() {
           sessions,
           hr,
           tzOffsetMin,
+          rhrHistory: rhr.history,
         },
         store.platform,
         now,
@@ -117,6 +151,8 @@ export default function App() {
         origins,
         eligibility,
         derived,
+        rhrNights: rhr.history.length,
+        rhrFallback: rhr.usedFallback,
         error: null,
       });
     } catch (e) {
@@ -174,6 +210,8 @@ export default function App() {
         <Row label="Integrity" value={d?.integrity ?? '—'} />
         <Row label="Wear presence" value={fmt(d?.wearPresence)} />
         <Row label="Deviation (min)" value={fmt(d?.deviationMin)} />
+        <Row label="RHR nights available" value={fmt(probe.rhrNights)} />
+        <Row label="RHR from fallback" value={fmt(probe.rhrFallback)} />
         <Row
           label="Wear ratio"
           value={

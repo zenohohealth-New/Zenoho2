@@ -7,7 +7,8 @@
     "listing hundreds of samples. mode=none emits nothing. mode=cover emits a sample",
     "every everyMin across [startIso,endIso). mode=buckets emits one sample in the",
     "middle of each of the first bucketCount 30-minute buckets from startIso, which is",
-    "how a precise wear-presence ratio is produced.",
+    "how a precise wear-presence ratio is produced. recordingMethod defaults to",
+    "AUTOMATIC and applies to every generated sample (D-019).",
     "kind=derive exercises deriveDailyState; kind=revision exercises applyRevision."
   ],
   "cases": [
@@ -38,7 +39,8 @@
           "sourceId": "com.garmin.android.apps.connectmobile",
           "startIso": "2026-09-06T17:40:00Z",
           "endIso": "2026-09-07T01:05:00Z",
-          "everyMin": 10
+          "everyMin": 10,
+          "recordingMethod": "AUTOMATIC"
         }
       },
       "expected": {
@@ -76,7 +78,8 @@
           "sourceId": "com.garmin.android.apps.connectmobile",
           "startIso": "2026-09-06T18:35:00Z",
           "endIso": "2026-09-07T01:10:00Z",
-          "everyMin": 10
+          "everyMin": 10,
+          "recordingMethod": "AUTOMATIC"
         }
       },
       "expected": {
@@ -114,7 +117,8 @@
           "sourceId": "com.garmin.android.apps.connectmobile",
           "startIso": "2026-09-06T17:45:00Z",
           "endIso": "2026-09-07T02:30:00Z",
-          "everyMin": 10
+          "everyMin": 10,
+          "recordingMethod": "AUTOMATIC"
         }
       },
       "expected": {
@@ -186,7 +190,8 @@
           "sourceId": "com.garmin.android.apps.connectmobile",
           "startIso": "2026-09-06T17:40:00Z",
           "endIso": "2026-09-07T01:05:00Z",
-          "everyMin": 10
+          "everyMin": 10,
+          "recordingMethod": "AUTOMATIC"
         }
       },
       "expected": {
@@ -230,7 +235,8 @@
           "sourceId": "com.garmin.android.apps.connectmobile",
           "startIso": "2026-09-06T13:30:00Z",
           "endIso": "2026-09-07T01:05:00Z",
-          "everyMin": 10
+          "everyMin": 10,
+          "recordingMethod": "AUTOMATIC"
         }
       },
       "expected": {
@@ -269,7 +275,8 @@
           "sourceId": "com.garmin.android.apps.connectmobile",
           "startIso": "2026-09-07T04:10:00Z",
           "endIso": "2026-09-07T11:35:00Z",
-          "everyMin": 10
+          "everyMin": 10,
+          "recordingMethod": "AUTOMATIC"
         }
       },
       "expected": {
@@ -449,7 +456,8 @@
           "sourceId": "com.garmin.android.apps.connectmobile",
           "startIso": "2026-09-06T18:20:00Z",
           "endIso": "2026-09-07T01:35:00Z",
-          "everyMin": 10
+          "everyMin": 10,
+          "recordingMethod": "AUTOMATIC"
         }
       },
       "expected": {
@@ -487,7 +495,8 @@
           "sourceId": "com.newbrand.watchapp",
           "startIso": "2026-09-06T17:40:00Z",
           "endIso": "2026-09-07T01:05:00Z",
-          "everyMin": 10
+          "everyMin": 10,
+          "recordingMethod": "AUTOMATIC"
         }
       },
       "expected": {
@@ -525,7 +534,8 @@
           "sourceId": "com.google.android.apps.healthdata",
           "startIso": "2026-09-06T17:40:00Z",
           "endIso": "2026-09-07T01:05:00Z",
-          "everyMin": 10
+          "everyMin": 10,
+          "recordingMethod": "AUTOMATIC"
         }
       },
       "expected": {
@@ -563,7 +573,8 @@
           "sourceId": "com.garmin.android.apps.connectmobile",
           "startIso": "2026-09-06T17:40:00Z",
           "endIso": "2026-09-07T01:05:00Z",
-          "everyMin": 10
+          "everyMin": 10,
+          "recordingMethod": "AUTOMATIC"
         },
         "rhrHistory": {
           "mode": "generate",
@@ -609,7 +620,8 @@
           "sourceId": "com.garmin.android.apps.connectmobile",
           "startIso": "2026-09-06T11:30:00Z",
           "endIso": "2026-09-07T01:05:00Z",
-          "everyMin": 10
+          "everyMin": 10,
+          "recordingMethod": "AUTOMATIC"
         }
       },
       "expected": {
@@ -647,7 +659,8 @@
           "sourceId": "com.garmin.android.apps.connectmobile",
           "startIso": "2026-09-06T18:33:00Z",
           "endIso": "2026-09-07T01:05:00Z",
-          "everyMin": 10
+          "everyMin": 10,
+          "recordingMethod": "AUTOMATIC"
         }
       },
       "expected": {
@@ -685,7 +698,8 @@
           "sourceId": "com.garmin.android.apps.connectmobile",
           "startIso": "2026-09-06T18:00:00Z",
           "endIso": "2026-09-07T00:30:00Z",
-          "everyMin": 10
+          "everyMin": 10,
+          "recordingMethod": "AUTOMATIC"
         }
       },
       "expected": {
@@ -693,6 +707,84 @@
         "integrity": "OK",
         "wearPresence": true,
         "deviationMin": 30,
+        "sourceId": "com.garmin.android.apps.connectmobile"
+      }
+    },
+    {
+      "id": "EXTRA-19-hr-from-blocked-source-cannot-prove-wear",
+      "ac": "beyond AC-2",
+      "kind": "derive",
+      "description": "D-019: sleep from Garmin but HR written by the phone -> L2 unsatisfied, NO_WEAR.",
+      "platform": "android",
+      "input": {
+        "nightDate": "2026-09-07",
+        "tzOffsetMin": 330,
+        "commitment": {
+          "bedTargetMin": 1380,
+          "wakeTargetMin": 390,
+          "toleranceMin": 30
+        },
+        "sessions": [
+          {
+            "sourceId": "com.garmin.android.apps.connectmobile",
+            "startIso": "2026-09-06T17:40:00Z",
+            "endIso": "2026-09-07T01:05:00Z",
+            "recordingMethod": "AUTOMATIC"
+          }
+        ],
+        "hr": {
+          "mode": "cover",
+          "sourceId": "com.google.android.apps.healthdata",
+          "startIso": "2026-09-06T17:40:00Z",
+          "endIso": "2026-09-07T01:05:00Z",
+          "everyMin": 10,
+          "recordingMethod": "AUTOMATIC"
+        }
+      },
+      "expected": {
+        "state": "NO_DATA",
+        "integrity": "NO_WEAR",
+        "wearPresence": false,
+        "deviationMin": null,
+        "sourceId": "com.garmin.android.apps.connectmobile"
+      }
+    },
+    {
+      "id": "EXTRA-20-manually-entered-hr-cannot-prove-wear",
+      "ac": "beyond AC-2",
+      "kind": "derive",
+      "description": "D-019: sleep from Garmin but hand-typed HR -> L2 unsatisfied, NO_WEAR.",
+      "platform": "android",
+      "input": {
+        "nightDate": "2026-09-07",
+        "tzOffsetMin": 330,
+        "commitment": {
+          "bedTargetMin": 1380,
+          "wakeTargetMin": 390,
+          "toleranceMin": 30
+        },
+        "sessions": [
+          {
+            "sourceId": "com.garmin.android.apps.connectmobile",
+            "startIso": "2026-09-06T17:40:00Z",
+            "endIso": "2026-09-07T01:05:00Z",
+            "recordingMethod": "AUTOMATIC"
+          }
+        ],
+        "hr": {
+          "mode": "cover",
+          "sourceId": "com.garmin.android.apps.connectmobile",
+          "startIso": "2026-09-06T17:40:00Z",
+          "endIso": "2026-09-07T01:05:00Z",
+          "everyMin": 10,
+          "recordingMethod": "MANUAL"
+        }
+      },
+      "expected": {
+        "state": "NO_DATA",
+        "integrity": "NO_WEAR",
+        "wearPresence": false,
+        "deviationMin": null,
         "sourceId": "com.garmin.android.apps.connectmobile"
       }
     },

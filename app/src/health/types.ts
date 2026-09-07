@@ -4,7 +4,7 @@
  * D-010: implementations return raw values to the *caller in this process only*.
  * Nothing here is serialisable to a network layer by design — see src/net.
  */
-import type { HrSample, SleepSession } from '../derive/types';
+import type { HrSample, RhrNight, SleepSession } from '../derive/types';
 
 export interface NightReadResult {
   readonly sessions: SleepSession[];
@@ -26,4 +26,13 @@ export interface HealthStore {
    * `tzOffsetMin` is the local UTC offset in minutes for that night.
    */
   readNight(nightDate: string, tzOffsetMin: number): Promise<NightReadResult>;
+
+  /**
+   * D-017: nightly resting heart rate for the last `days`, newest-last, for the
+   * D-009 L3 coherence check. Returns an empty array when the store exposes no
+   * resting-heart-rate record; the caller then falls back to `deriveNightlyRhr`.
+   *
+   * D-010: these values are for on-device comparison only and are never uploaded.
+   */
+  readRhrHistory(days: number, tzOffsetMin: number): Promise<RhrNight[]>;
 }

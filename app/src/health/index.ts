@@ -15,9 +15,14 @@ let cached: HealthStore | null = null;
 export function getHealthStore(): HealthStore {
   if (cached) return cached;
   if (Platform.OS === 'android') {
+    // Lazy require, not a static import: a static import would pull the native
+    // module into pure Node test runs.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { HealthConnectStore } = require('./healthConnect.android');
     cached = new HealthConnectStore();
   } else if (Platform.OS === 'ios') {
+    // Lazy require, as above.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { HealthKitStore } = require('./healthKit.ios');
     cached = new HealthKitStore();
   } else {

@@ -22,11 +22,17 @@ export interface SleepSession {
   readonly recordingMethod: RecordingMethod;
 }
 
-/** One heart-rate sample. Used only for wear presence (D-009 L2) and RHR (L3). */
+/**
+ * One heart-rate sample. Used only for wear presence (D-009 L2) and RHR (L3).
+ *
+ * D-019: provenance is carried on HR too, because a phone-written or manually
+ * entered heart rate must not be able to satisfy the wear-time check.
+ */
 export interface HrSample {
   readonly sourceId: string;
   readonly atMs: number;
   readonly bpm: number;
+  readonly recordingMethod: RecordingMethod;
 }
 
 export type ToleranceMin = 15 | 30 | 45 | 60;

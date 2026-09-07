@@ -15,12 +15,20 @@ import {
   queryQuantitySamples,
   requestAuthorization,
 } from '@kingstinct/react-native-healthkit';
-import type { HrSample, RecordingMethod, SleepSession } from '../derive/types';
+import { localDateKey } from '../derive/time';
+import type {
+  HrSample,
+  RecordingMethod,
+  RhrNight,
+  SleepSession,
+} from '../derive/types';
 import type { HealthStore, NightReadResult, PermissionOutcome } from './types';
 import { nightReadWindow } from './window';
 
 const SLEEP = 'HKCategoryTypeIdentifierSleepAnalysis' as const;
 const HEART_RATE = 'HKQuantityTypeIdentifierHeartRate' as const;
+/** D-017: HealthKit exposes resting heart rate as its own quantity type. */
+const RESTING_HR = 'HKQuantityTypeIdentifierRestingHeartRate' as const;
 
 /**
  * HKCategoryValueSleepAnalysis values that mean "asleep". `inBed` (0) is excluded:
@@ -43,7 +51,10 @@ export class HealthKitStore implements HealthStore {
   async requestReadPermissions(): Promise<PermissionOutcome> {
     if (!isHealthDataAvailable()) return 'UNAVAILABLE';
     // `toShare` is deliberately empty: Zenoho never writes to HealthKit.
-    const ok = await requestAuthorization({ toRead: [SLEEP, HEART_RATE], toShare: [] } as never);
+    const ok = await requestAuthorization({
+      toRead: [SLEEP, HEART_RATE, RESTING_HR],
+      toShare: [],
+    } as never);
     if (!ok) return 'DENIED';
     // Spec §12: background delivery for sleepAnalysis + heartRate.
     await enableBackgroundDelivery(SLEEP, 'hourly' as never);
@@ -85,8 +96,33 @@ export class HealthKitStore implements HealthStore {
       sourceId: s.sourceRevision.source.bundleIdentifier,
       atMs: s.startDate.getTime(),
       bpm: s.quantity,
+      // D-019: provenance rides along on every sample.
+      recordingMethod: recordingMethodFrom(s.metadata as Record<string, unknown>),
     }));
 
     return { sessions, hr };
+  }
+
+  /** D-017: HealthKit exposes resting heart rate directly. NEVER RUN (D-013). */
+  async readRhrHistory(days: number, tzOffsetMin: number): Promise<RhrNight[]> {
+    const endMs = Date.now();
+    const startMs = endMs - days * 24 * 60 * 60_000;
+
+    const samples = await queryQuantitySamples(RESTING_HR, {
+      filter: { date: { startDate: new Date(startMs), endDate: new Date(endMs) } },
+      limit: -1,
+      unit: 'count/min' as never,
+    });
+
+    // One value per night; keep the last of any duplicates.
+    const byNight = new Map<string, number>();
+    for (const s of samples) {
+      if (recordingMethodFrom(s.metadata as Record<string, unknown>) === 'MANUAL') continue;
+      byNight.set(localDateKey(s.startDate.getTime(), tzOffsetMin), s.quantity);
+    }
+
+    return [...byNight.entries()]
+      .map(([nightDate, restingBpm]) => ({ nightDate, restingBpm }))
+      .sort((a, b) => (a.nightDate < b.nightDate ? -1 : 1));
   }
 }

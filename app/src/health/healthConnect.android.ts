@@ -10,13 +10,21 @@ import {
   requestPermission,
   SdkAvailabilityStatus,
 } from 'react-native-health-connect';
-import type { HrSample, RecordingMethod, SleepSession } from '../derive/types';
+import { localDateKey } from '../derive/time';
+import type {
+  HrSample,
+  RecordingMethod,
+  RhrNight,
+  SleepSession,
+} from '../derive/types';
 import type { HealthStore, NightReadResult, PermissionOutcome } from './types';
 import { nightReadWindow, toIso } from './window';
 
 const READ_PERMISSIONS = [
   { accessType: 'read', recordType: 'SleepSession' },
   { accessType: 'read', recordType: 'HeartRate' },
+  // D-017: resting heart rate feeds the D-009 L3 coherence check, on device only.
+  { accessType: 'read', recordType: 'RestingHeartRate' },
 ] as const;
 
 /** Spec §12 / D-011: background + history are requested alongside the reads. */
@@ -109,15 +117,47 @@ export class HealthConnectStore implements HealthStore {
     const hr: HrSample[] = [];
     for (const record of heart.records) {
       const sourceId = record.metadata?.dataOrigin ?? '';
+      // D-019: provenance rides along on every sample so a phone-written or
+      // manually entered heart rate cannot satisfy the wear-time check.
+      const recordingMethod = mapRecordingMethod(record.metadata?.recordingMethod);
       for (const sample of record.samples) {
         hr.push({
           sourceId,
           atMs: Date.parse(sample.time),
           bpm: sample.beatsPerMinute,
+          recordingMethod,
         });
       }
     }
 
     return { sessions, hr };
+  }
+
+  /** D-017: Health Connect exposes RestingHeartRate directly. */
+  async readRhrHistory(days: number, tzOffsetMin: number): Promise<RhrNight[]> {
+    if (!(await this.ensureInit())) return [];
+
+    const endMs = Date.now();
+    const startMs = endMs - days * 24 * 60 * 60_000;
+
+    const result = await readRecords('RestingHeartRate', {
+      timeRangeFilter: {
+        operator: 'between',
+        startTime: toIso(startMs),
+        endTime: toIso(endMs),
+      },
+    });
+
+    // One value per night: Health Connect may hold several, so keep the last.
+    const byNight = new Map<string, number>();
+    for (const record of result.records) {
+      if (mapRecordingMethod(record.metadata?.recordingMethod) === 'MANUAL') continue;
+      const atMs = Date.parse(record.time);
+      byNight.set(localDateKey(atMs, tzOffsetMin), record.beatsPerMinute);
+    }
+
+    return [...byNight.entries()]
+      .map(([nightDate, restingBpm]) => ({ nightDate, restingBpm }))
+      .sort((a, b) => (a.nightDate < b.nightDate ? -1 : 1));
   }
 }

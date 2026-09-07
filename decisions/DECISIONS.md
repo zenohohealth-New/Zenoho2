@@ -91,6 +91,55 @@ Status: DECIDED
 First test device: Samsung Galaxy S26 Ultra + Garmin Vívoactive 5, Garmin Connect → Health Connect, verified working by founder on 2026-09-07.
 Status: DECIDED
 
+## D-015 · (unused)
+No decision was recorded under this id. The checker's R-001 rulings were numbered from
+D-016, so D-015 is a deliberate gap, not a lost entry. Do not reuse the number.
+Status: N/A
+
+## D-016 · 2026-09-07 · Timezone jump produces the TRAVEL state, not NO_DATA
+A night whose local UTC offset moved more than 3 h from the previous day is
+`state = TRAVEL, integrity = TRAVEL`.
+Why: spec §5's travel rule said "NO_DATA, integrity = TRAVEL", but §7 lists TRAVEL among the
+states a witness sees, §8's enum is `state{KEPT,MISSED,NO_DATA,TRAVEL}`, §5's own streak rule
+treats "NO_DATA/TRAVEL" as siblings, and AC-2 says "timezone jump → TRAVEL". Three places to
+one. Spec §5 was the outlier and has been corrected to match.
+Evidence: raised as R-001 assumption 1; ruled by checker 2026-09-07.
+Status: DECIDED
+
+## D-017 · 2026-09-07 · Resting heart rate has its own read path, with an on-device fallback
+`HealthStore` gains `readRhrHistory(days, tzOffsetMin) → RhrNight[]`, reading Health Connect
+`RestingHeartRateRecord` on Android and `HKQuantityTypeIdentifierRestingHeartRate` on iOS.
+Where a store exposes no such record, the night's RHR is derived on device as the 10th
+percentile of heart rate inside the sleep window and persisted locally.
+Why: D-009 L3 needs a 30-night RHR baseline, but `readNight` returns only sessions plus HR,
+and raw samples are purged at 45 days — so the baseline cannot be rebuilt from raw data.
+D-010 is unchanged: RHR values and baselines never leave the device.
+Open: which local persistence engine holds the derived history. `mergeRhrNight` fixes the
+shape and retention; the durable store lands in T-002.
+Status: DECIDED
+
+## D-018 · 2026-09-07 · iOS eligibility keys on the source device model, not the bundle id
+On iOS a sleep sample is eligible only if its HealthKit source device model contains "Watch".
+iPhone-written or manual sleep = NO_SOURCE.
+Why: spec §9 allow-lists `com.apple.health` for Apple Watch, but iPhone-only sleep is written
+under the same bundle id, so the bundle alone cannot enforce D-003 and §9 as written would
+have admitted phone-only sleep on iOS.
+Implement when iOS work resumes (D-013), not before. Recorded now so the gap is not
+rediscovered later.
+Status: DECIDED (implementation deferred)
+
+## D-019 · 2026-09-07 · Wear presence only counts heart rate from an acceptable source
+An HR sample contributes to the D-009 L2 wear-time check only if its own source passes the
+§9 classification. Phone-written and manually entered heart rate can never satisfy L2. Any
+acceptable wearable source counts, not only the app that wrote the sleep session — a watch
+writing sleep while a strap writes HR still proves the wrist was worn.
+Why: without this, a phone could manufacture the heart rate that proves a watch was worn,
+which defeats the point of L2.
+Note on scope: the implementation excludes sources classified BLOCKED, so ALLOWED and
+UNKNOWN sources both count. Excluding UNKNOWN as well would contradict §9's rule that an
+unlisted brand is flagged UNVERIFIED rather than silently excluded. Flagged to the checker.
+Status: DECIDED
+
 ---
 
 ## OPEN ITEMS (blocked on a device, not on a person)

@@ -2,13 +2,17 @@
 
 Task: tasks/T-001-foundation.md · Maker: Claude Code · Status set to IN_REVIEW
 Spec sections read: §4, §5, §7, §9, §11, §12, §13 · Decisions: D-003, D-009, D-010, D-011, D-012, D-013, D-014
-Date: 2026-09-07
+Date: 2026-09-07 · Revised 2026-09-07 after checker review (code PASS, device evidence BLOCKED)
 
 > **Headline for the checker:** deliverables 1–6 are complete and green in CI-equivalent
 > local runs. **Deliverable "device evidence" is NOT met.** No APK was ever installed on a
 > phone, because this machine has no JDK, no Android SDK and no `adb`, and EAS is not
 > logged in. AC-1 and the Android half of AC-10 are therefore **unproven**, not passed.
 > Section 9 and "Blocked on founder action" say exactly what is needed to close that.
+>
+> **Revision note:** checker rulings D-016 to D-019 are implemented; `expo-build-properties`
+> and `expo lint` are in. Section 9 is deliberately untouched — it stays as it is until the
+> phone screenshot exists. Section 10 records what happened with the hook removal.
 
 ---
 
@@ -41,10 +45,24 @@ whitelist of the seven columns §7 permits (a new field on `DerivedNight` cannot
 accident). `app/src/net/guard.ts` re-checks any outgoing body at runtime and throws on a
 forbidden key, an ISO instant, or an epoch-millisecond integer.
 
+**Checker rulings (2026-09-07).** D-016: the timezone-jump branch produces
+`state = TRAVEL` — my implementation was already correct, and spec §5 was corrected to match
+§7/§8/AC-2. D-017: `HealthStore` gained `readRhrHistory(days, tzOffsetMin)`, implemented on
+both bridges against `RestingHeartRateRecord` / `HKQuantityTypeIdentifierRestingHeartRate`,
+with an on-device 10th-percentile fallback persisted locally. D-018: recorded, implementation
+deferred with iOS. D-019: wear presence now rejects HR whose own source is blocked, and
+`HrSample` carries `recordingMethod` so a hand-typed heart rate cannot satisfy L2.
+
+**Build and lint.** `expo-build-properties` pins `android.minSdkVersion=28` (spec §12) —
+verified in the generated `android/gradle.properties`, which the previous dead `app.json` key
+never produced. `expo lint` is configured; the four warnings it first reported are fixed, two
+by merging duplicate type imports and two with a targeted disable on the deliberate lazy
+`require()` in the platform dispatcher.
+
 **Device harness.** `App.tsx` is a diagnostic screen, not product UI. It reports health-store
 availability, permission outcome, background-read grant, counts read, **the real
-`dataOrigin` strings observed on the device** (a T-001 open item), eligibility, and the
-derived night. It is the instrument that will close section 9 once an APK is installed.
+`dataOrigin` strings observed on the device** (a T-001 open item), eligibility, RHR history
+depth and whether the D-017 fallback was used, and the derived night. It is the instrument that will close section 9 once an APK is installed.
 
 ---
 
@@ -76,16 +94,20 @@ app/src/health/index.ts       lazy platform dispatch + test seam
 app/src/net/payload.ts        §7 field whitelist
 app/src/net/guard.ts          raw-health leak guard + guardedFetch
 app/src/storage/purge.ts      45-day local retention
+app/src/storage/rhrStore.ts   D-017 local RHR history shape + retention (engine: T-002)
+app/src/health/rhrHistory.ts  D-017 store-first, percentile-fallback assembly
+app/eslint.config.js          expo lint (eslint-config-expo flat)
 ```
 
 **Created — tests**
 ```
-tests/fixtures/derivation-cases.json   19 cases (9 AC-2, 10 beyond)
+tests/fixtures/derivation-cases.json   21 cases (9 AC-2, 12 beyond)
 tests/helpers/fixtures.ts              expands the compact HR/RHR generators
 tests/derive.test.ts                   AC-2 + §5 helper units
 tests/eligibility.test.ts              AC-1 + §9 classification
 tests/netguard.test.ts                 AC-9
 tests/purge.test.ts                    45-day retention
+tests/rhr-history.test.ts              D-017 fallback, merge and load paths
 ```
 
 **Modified — root**
@@ -106,6 +128,7 @@ feat(app): scaffold Expo dev-client app with Health Connect + HealthKit bindings
 feat(derive): pure-TS daily state derivation, eligibility and network guard
 feat(app): T-001 device harness screen and EAS build profiles
 docs: R-001 implementation report; T-001 IN_REVIEW
+fix(derive): rulings D-016-D-019; build props; lint
 ```
 
 ---
@@ -114,13 +137,13 @@ docs: R-001 implementation report; T-001 IN_REVIEW
 
 | Gate | Command | Result |
 |---|---|---|
-| Unit + fixtures | `npm test` (vitest) | **54/54 passed**, 4 files |
+| Unit + fixtures | `npm test` (vitest) | **69/69 passed**, 5 files |
 | Typecheck | `npx tsc --noEmit` | **clean**, 0 errors — covers `app/src` (both platform bridges) and `tests/` |
-| Native config | `npx expo prebuild --platform android --clean` | **succeeded**; manifest inspected |
+| Native config | `npx expo prebuild --platform android --clean` | **succeeded**; manifest and `minSdkVersion=28` inspected |
 | Android build | — | **NOT RUN** (no JDK / Android SDK / adb; EAS not logged in) |
 | iOS build | — | **SKIPPED** by D-013 |
 | RLS denial (AC-3) | — | **SKIPPED**; no backend exists in T-001 by instruction |
-| Lint | — | **NOT RUN**; no linter configured. `expo lint` would add ESLint + config as new dependencies, which the task's minimal-dependency rule says to justify first. Flagged in §6. |
+| Lint | `npx expo lint` | **clean**, 0 errors 0 warnings (approved by checker 2026-09-07) |
 
 Generated `AndroidManifest.xml` contained exactly the four intended health permissions and
 **no** `permission.health.WRITE_*` entry, plus the Health Connect rationale intent filter
@@ -132,6 +155,11 @@ android.permission.health.READ_HEART_RATE
 android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND
 android.permission.health.READ_HEALTH_DATA_HISTORY
 ```
+
+After adding `expo-build-properties`, `android/gradle.properties` contains
+`android.minSdkVersion=28`, satisfying spec §12. Health Connect's `RestingHeartRate` read
+permission (D-017) is requested at runtime alongside sleep and heart rate; it is not a
+separate manifest entry.
 
 The generated `android/` directory was deleted afterwards (Expo CNG; it is gitignored).
 
@@ -151,7 +179,7 @@ AC-2 asks for eight behaviours; "late sync" splits into a before/after pair, so 
 | 8 | `AC2-08a-late-sync-before-1400-revises` | revised, revisionCount 1 |
 | 9 | `AC2-08b-late-sync-after-1400-does-not-revise` | unchanged, frozen |
 
-**Ten cases beyond AC-2** (the task asked for at least five):
+**Twelve cases beyond AC-2** (the task asked for at least five):
 
 | # | Case | Why it earns its place |
 |---|---|---|
@@ -165,6 +193,8 @@ AC-2 asks for eight behaviours; "late sync" splits into a before/after pair, so 
 | 17 | `EXTRA-16-deviation-rounds-to-nearest-five` | 63 → 65, not 63 or 60. |
 | 18 | `EXTRA-17-deviation-exactly-at-tolerance-is-kept` | §5 says ≤, so ±30 at tolerance 30 is KEPT, not MISSED. |
 | 19 | `EXTRA-18-second-revision-is-refused` | §5 allows the state to be revised *once*. |
+| 20 | `EXTRA-19-hr-from-blocked-source-cannot-prove-wear` | D-019: Garmin sleep but phone-written HR → NO_WEAR. Closes the hole where a phone manufactures the proof that a watch was worn. |
+| 21 | `EXTRA-20-manually-entered-hr-cannot-prove-wear` | D-019: Garmin sleep but hand-typed HR → NO_WEAR. |
 
 AC-9 is tested by running every fixture night through the real pipeline
 (derive → `toServerRow` → `guardedFetch`) with `fetch` stubbed, then asserting the captured
@@ -176,7 +206,7 @@ guard that silently stopped working fails the suite rather than passing it.
 
 ## 4. Tests passed / failed
 
-**Passed: 54. Failed: 0.** No test is skipped, `.only`'d, or marked todo.
+**Passed: 69. Failed: 0.** No test is skipped, `.only`'d, or marked todo.
 
 Honest caveat the checker should weigh: I wrote both the fixtures and the implementation.
 The suite proves the code matches *my reading* of §5 — it cannot prove that reading is what
@@ -188,20 +218,17 @@ the founder meant, and it cannot prove anything about real Health Connect data. 
 
 Each of these was a genuine fork in the spec. None is invented policy; all are readings.
 
-1. **TRAVEL is a state, not an integrity flag on NO_DATA.** §5's travel rule says
-   "that night = NO_DATA, integrity = TRAVEL", but §7 lists TRAVEL among the states a
-   witness sees, §8's enum has `state{…,TRAVEL}`, §5's own streak rule treats "NO_DATA/TRAVEL"
-   as siblings, and AC-2 says "timezone jump → TRAVEL". Three places to one, so I implemented
-   `state = TRAVEL, integrity = TRAVEL`. **This is the assumption most likely to be wrong.**
-   It is one line to flip: `deriveDailyState`'s travel branch in `app/src/derive/index.ts`.
+1. ~~**TRAVEL is a state, not an integrity flag on NO_DATA.**~~ **RESOLVED — D-016.**
+   The checker confirmed the reading; spec §5 has been corrected to match §7/§8/AC-2. No code
+   change was needed.
 2. **Night date = the calendar day the user wakes** (§4), so the §4 start window runs
    18:00 on N−1 to 12:00 on N.
 3. **A trailing partial wear bucket counts as a full bucket.** A 70-minute session is 3
    buckets, not 2.33. A 20-minute tail with no HR is still 20 unproven minutes.
-4. **Wear presence accepts HR from any source**, not only the app that wrote the sleep
-   session. Rationale: a Garmin watch writing sleep while a chest strap writes HR still
-   proves the wrist was worn. `wearPresence()` takes an optional `sourceId` if the checker
-   decides the stricter reading is correct.
+4. ~~**Wear presence accepts HR from any source.**~~ **SUPERSEDED — D-019.** HR now counts
+   only if its own source passes §9 classification; `HrSample` carries `recordingMethod` so
+   manual entries are rejected too. Any acceptable wearable still counts, not only the app
+   that wrote the sleep session.
 5. **"Revised once" means at most one revision, ever** — tracked by `revisionCount`, and
    independently frozen at 14:00 local.
 6. **RHR baseline windows exclude the night being judged**: baseline = median of the last
@@ -209,32 +236,43 @@ Each of these was a genuine fork in the spec. None is invented policy; all are r
 7. **`deviation_min` rounds half away from zero** to the nearest 5 (63 → 65).
 8. **An unknown origin sets integrity = UNVERIFIED even when RHR is fine**, since §9's
    soft-fail and L3 both land on the same flag.
+8b. **D-019 excludes only BLOCKED sources from wear presence, so UNKNOWN ones still count.**
+   The ruling says "only if their source is an allow-listed wearable", which read literally
+   would also exclude UNKNOWN — but that would break §9's rule that an unlisted brand is
+   flagged rather than silently excluded, and would turn `EXTRA-12` into NO_WEAR. The stated
+   harm (phone and manual HR) is fully covered by excluding BLOCKED. **Confirm this narrower
+   reading**; tightening it further is a one-line change in `deriveDailyState`.
 9. **Longest-session ties break toward the earlier start**, purely for determinism.
 10. **Ineligible sources are filtered before "longest" is applied**, so a long manual entry
     cannot shadow a shorter real wearable session. Unit-tested.
 11. **The §9 allow-list identifier strings are my best reconstruction, not observed fact.**
     §9 names brands; it does not give package ids. Every entry is marked `verified: false`.
+12. **The D-017 fallback uses a nearest-rank 10th percentile** and returns null below 10
+    samples in the window, rather than emitting a figure a thin night cannot support — a bad
+    RHR value feeds a false integrity flag.
+13. **One RHR value per night**, keyed on local date; where a store holds several, the last
+    is kept.
 
 ---
 
 ## 6. Unresolved issues
 
-1. **§5 vs §7/§8/AC-2 on TRAVEL** — see assumption 1. Needs a one-line ruling.
-2. **iOS `com.apple.health` admits phone-only sleep.** §9 allow-lists that bundle for Apple
-   Watch, but iPhone-only sleep is written under the same id, so the bundle alone cannot
-   separate them — as written, §9 would let phone-only sleep through on iOS and contradict
-   D-003. Recorded in the allow-list's `openQuestions`. Not urgent while iOS is deferred;
-   blocking before iOS ships.
-3. **No RHR source is wired.** L3 is implemented and tested, but `readNight`'s contract is
-   fixed by T-001 deliverable 2 as `→ { sessions, hr }`, which has no room for resting-heart-rate
-   history. Wiring it needs either a contract change or a second bridge method. I did not
-   choose one, per "do not exceed the task's scope". **Decision needed.**
-4. **`minSdkVersion` is not pinned to 28** (spec §12: Android 9 minimum). I set
-   `android.minSdkVersion` in `app.json`, discovered prebuild ignores it — it is not an Expo
-   config key — and removed it rather than leave dead config that reads as satisfied. Pinning
-   it properly needs the `expo-build-properties` plugin, i.e. a new dependency. **Approval needed.**
-5. **No linter.** `expo lint` would install ESLint and a config. One dependency, low risk,
-   but it is a new dependency and the rule says justify first. **Approval needed.**
+1. ~~§5 vs §7/§8/AC-2 on TRAVEL~~ — **CLOSED by D-016.**
+2. ~~iOS `com.apple.health` admits phone-only sleep~~ — **RULED by D-018** (eligibility keys
+   on the source device model containing "Watch"). Spec §9 and the allow-list now say so.
+   **Still open as work:** the rule is not implemented, by instruction, until iOS resumes.
+   `classifySource` has no device-model parameter yet, so this is a signature change when it
+   lands, not a data change.
+3. ~~No RHR source is wired~~ — **CLOSED by D-017**, via a second bridge method plus the
+   on-device fallback. **One sub-item stays open:** which engine persists the derived history.
+   `rhrStore.ts` fixes the shape, the merge rule and the 45-night retention, and ships an
+   in-memory implementation, but that resets when the app restarts — so an L3 baseline cannot
+   actually accumulate yet. No decision covers local persistence, and choosing AsyncStorage,
+   expo-sqlite or expo-file-system unilaterally would be inventing one. **Decision needed
+   before L3 means anything in the field.** Not blocking T-001's remaining device evidence.
+4. ~~`minSdkVersion` is not pinned to 28~~ — **CLOSED.** `expo-build-properties` approved and
+   added; `android.minSdkVersion=28` verified in the generated project.
+5. ~~No linter~~ — **CLOSED.** `expo lint` approved and configured; clean.
 6. **Health Connect background-read availability on the S26 Ultra is unknown** — the original
    T-001 open item, still open, because nothing has run on the phone. `READ_HEALTH_DATA_IN_BACKGROUND`
    is requested and present in the manifest, but Android 15+ gates it and the harness has not
@@ -247,9 +285,8 @@ Each of these was a genuine fork in the spec. None is invented policy; all are r
 9. **Play Console health declaration is not filed.** Spec §12 wants it in week 1 (approval up
    to 7 days plus 5–7 business days whitelist propagation). Not a T-001 deliverable, but it is
    the longest lead time on the board and starts nothing until someone files it.
-10. **Environment, not project:** a `PostToolUse` hook in the local Claude config points at a
-    missing file (`…/rpm/plugin_01HuktqZUKz58qgxUm1mfuh6/hooks/validate_antipatterns.py`) and
-    errors on every file write. Harmless here, noisy.
+10. **The failing hook could not be removed as instructed** — see §10 below for what it
+    actually is and what will remove it.
 
 ---
 
@@ -280,8 +317,9 @@ Each of these was a genuine fork in the spec. None is invented policy; all are r
 
 **Before T-002, close the device loop.** In order:
 
-1. Founder answers the three approval questions in §6 (items 3, 4, 5) and the TRAVEL ruling
-   (item 1). All four are one-liners; all four are cheap now and expensive later.
+1. ~~Founder answers the approval questions~~ — done; D-016 to D-019 are implemented. Two
+   small things still want a ruling: local RHR persistence (§6 item 3) and the narrow reading
+   of D-019 (§5 item 8b).
 2. Founder logs into EAS; I run the development APK build and hand over the install steps.
 3. Founder installs it on the S26 Ultra, grants Health Connect permissions, and screenshots
    the harness. That single screenshot closes AC-1, the Android half of AC-10, and both
@@ -346,3 +384,32 @@ and give you a download link. Then, on the phone:
 
 That screenshot is the evidence section 9 is missing. Nothing else in T-001 is waiting on
 anything.
+
+---
+
+## 10. Hook removal (checker item 7) — NOT DONE, and why
+
+The instruction was to remove the failing `PostToolUse` hook from the user-level Claude
+settings. **It is not there, so there was nothing to remove.** I did not want to fabricate an
+edit that would look like compliance, so here is the actual finding.
+
+- `~/.claude/settings.json` contains five keys — `autoUpdatesChannel`, `skipWorkflowUsageWarning`,
+  `theme`, `inputNeededNotifEnabled`, `agentPushNotifEnabled`. No `hooks` block.
+  There is no `~/.claude/settings.local.json`, and `~/.claude.json` has no hook configuration.
+- The hook is contributed by the **Pixeltable plugin v2.6.0**, bundled by the Claude desktop
+  app under `…/local-agent-mode-sessions/<session>/rpm/plugin_01HuktqZUKz58qgxUm1mfuh6/`.
+  Its `hooks/hooks.json` registers `validate_antipatterns.py` on `PostToolUse` for
+  `Write|Edit|MultiEdit`, and `session_orientation.py` on `SessionStart`.
+- Correction to what I reported earlier: **the script is not missing.** It exists at that path
+  and is readable. `python3` resolves to the Windows Store shim at
+  `AppData/Local/Microsoft/WindowsApps/python3` (Python 3.14.4), and that invocation is what
+  fails to open the file — so this is a Windows path/launcher problem in the plugin's hook
+  command, not a broken install and not anything Zenoho2 did.
+- **It is harmless.** It runs after a write has already succeeded and only prints an error; no
+  file in this repo was affected, and every gate above passed with it firing.
+
+**What will actually remove it:** disable or uninstall the Pixeltable plugin in the Claude
+desktop app's plugin settings. It has nothing to do with this project. I deliberately did not
+reach for a project-level `disableAllHooks` in `C:\Zenoho2\.claude\settings.json` — that
+would silence *all* hooks in Zenoho2, including ones you may want later, to suppress one
+unrelated plugin's error message. Say the word if you would rather have that anyway.

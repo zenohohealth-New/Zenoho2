@@ -35,6 +35,14 @@
     "scheme": "zenoho2",
     "plugins": [
       "expo-dev-client",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 28
+          }
+        }
+      ],
       "react-native-health-connect",
       [
         "@kingstinct/react-native-healthkit",

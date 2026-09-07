@@ -1,7 +1,7 @@
 # ZENOHO2 — V1 SPECIFICATION
 
 Version 1.0 · 2026-09-07 · Author: Claude Web (checker) · Owner: Founder
-Governing decisions: decisions/DECISIONS.md D-001 … D-014. Where this spec and the log disagree, the log wins.
+Governing decisions: decisions/DECISIONS.md D-001 … D-019. Where this spec and the log disagree, the log wins.
 
 ## 1. One-line product
 
@@ -55,7 +55,7 @@ deviation_min = max(|bed_dev|, |wake_dev|) rounded to 5
 Rules:
 - Derivation runs at: app foreground; background delivery/read where the OS allows; and on the morning push (wake_target + 60 min).
 - A day's state may be revised once until 14:00 local (late syncs); after that it is frozen.
-- Timezone change > 3 h in a day → that night = NO_DATA, integrity = TRAVEL (not counted against streak).
+- Timezone change > 3 h in a day → that night = TRAVEL, integrity = TRAVEL (not counted against streak). (D-016: was "NO_DATA, integrity = TRAVEL", which contradicted §7, §8 and AC-2.)
 - Streak counts KEPT only; MISSED resets cycle streak; NO_DATA/TRAVEL neither counts nor resets, but 3 consecutive NO_DATA nights show a "device?" prompt to the member.
 
 ## 6. Cycle
@@ -99,6 +99,8 @@ Row-level security: a user reads own rows; witness reads `state` and `checkins.n
 iOS (HealthKit sourceRevision bundle prefixes): `com.apple.health` (Apple Watch), Garmin, Zepp/Amazfit, Xiaomi Mi Fitness, Oura, WHOOP, Ultrahuman, Polar, Withings, Fitbit-bridge apps (BitSync etc. flagged UNVERIFIED).
 Android (Health Connect dataOrigin package): `com.sec.android.app.shealth`, Google Health/Fitbit, Garmin Connect, Zepp, Mi Fitness, Oura, WHOOP, Polar, Withings. Ultrahuman: UNVERIFIED.
 Unknown origin with HR present → accept as eligible but integrity = UNVERIFIED (so a new brand doesn't silently exclude). Unknown origin with no HR → NO_DATA.
+iOS extra rule (D-018): `com.apple.health` covers both Apple Watch and iPhone-only sleep, so the bundle id alone cannot enforce D-003. On iOS a sleep sample is eligible only if its HealthKit source device model contains "Watch"; iPhone-written or manual sleep = NO_SOURCE. Implement when iOS work resumes.
+Heart rate (D-019): an HR sample counts towards wear presence (§4, D-009 L2) only if its own source passes this section. Phone-written or manually entered HR can never satisfy L2.
 
 ## 10. Notifications
 

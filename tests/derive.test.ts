@@ -16,6 +16,7 @@ import {
 } from '../app/src/derive';
 import { rhrCoherence } from '../app/src/derive/rhr';
 import { selectMainSession } from '../app/src/derive/session';
+import type { HrSample } from '../app/src/derive/types';
 import { deriveCases, revisionCases } from './helpers/fixtures';
 
 const COMPUTED_AT = Date.parse('2026-09-07T04:00:00Z');
@@ -105,14 +106,27 @@ describe('§5 helpers', () => {
   it('wearPresence counts a trailing partial bucket', () => {
     const start = Date.parse('2026-09-07T00:00:00Z');
     const end = start + 70 * 60_000; // 70 min -> 3 buckets (30 + 30 + 10)
-    const hr = [
-      { sourceId: 'x', atMs: start + 5 * 60_000, bpm: 60 },
-      { sourceId: 'x', atMs: start + 35 * 60_000, bpm: 60 },
+    const hr: HrSample[] = [
+      { sourceId: 'x', atMs: start + 5 * 60_000, bpm: 60, recordingMethod: 'AUTOMATIC' },
+      { sourceId: 'x', atMs: start + 35 * 60_000, bpm: 60, recordingMethod: 'AUTOMATIC' },
     ];
     const w = wearPresence(hr, start, end);
     expect(w.bucketsTotal).toBe(3);
     expect(w.bucketsCovered).toBe(2);
     expect(w.present).toBe(false); // 0.667 < 0.70
+  });
+
+  it('D-019: wearPresence drops samples the source filter rejects', () => {
+    const start = Date.parse('2026-09-07T00:00:00Z');
+    const end = start + 60 * 60_000; // 2 buckets
+    const hr: HrSample[] = [
+      { sourceId: 'com.phone.os', atMs: start + 5 * 60_000, bpm: 60, recordingMethod: 'AUTOMATIC' },
+      { sourceId: 'com.phone.os', atMs: start + 35 * 60_000, bpm: 60, recordingMethod: 'AUTOMATIC' },
+    ];
+    const w = wearPresence(hr, start, end, (s) => s.sourceId !== 'com.phone.os');
+    expect(w.bucketsCovered).toBe(0);
+    expect(w.samplesRejected).toBe(2);
+    expect(w.present).toBe(false);
   });
 
   it('cycleStreak counts KEPT, resets on MISSED, ignores NO_DATA and TRAVEL', () => {

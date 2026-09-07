@@ -72,13 +72,15 @@ function expandHr(spec: Record<string, unknown>): HrSample[] {
 
   const sourceId = spec.sourceId as string;
   const startMs = Date.parse(spec.startIso as string);
+  // D-019: generated samples carry provenance; AUTOMATIC unless a case says otherwise.
+  const recordingMethod = (spec.recordingMethod as RecordingMethod) ?? 'AUTOMATIC';
 
   if (mode === 'cover') {
     const endMs = Date.parse(spec.endIso as string);
     const stepMs = (spec.everyMin as number) * MIN_MS;
     const out: HrSample[] = [];
     for (let t = startMs; t < endMs; t += stepMs) {
-      out.push({ sourceId, atMs: t, bpm: FILLER_BPM });
+      out.push({ sourceId, atMs: t, bpm: FILLER_BPM, recordingMethod });
     }
     return out;
   }
@@ -88,7 +90,12 @@ function expandHr(spec: Record<string, unknown>): HrSample[] {
     const count = spec.bucketCount as number;
     const out: HrSample[] = [];
     for (let i = 0; i < count; i += 1) {
-      out.push({ sourceId, atMs: startMs + i * BUCKET_MS + BUCKET_MS / 2, bpm: FILLER_BPM });
+      out.push({
+        sourceId,
+        atMs: startMs + i * BUCKET_MS + BUCKET_MS / 2,
+        bpm: FILLER_BPM,
+        recordingMethod,
+      });
     }
     return out;
   }
