@@ -1,0 +1,40 @@
+<!--
+  Supabase Auth → Email Templates → "Confirm signup"
+
+  Paste this whole file into that template. It is used when a brand-new user signs
+  in for the first time. It matters because auth.email.enable_confirmations is
+  true on this project, so a first-time user gets THIS template, not Magic Link — get
+  only one of the two right and sign-in works for you and fails for every new user.
+
+  Why the link is gone entirely: Zenoho is a phone app with no website. The default
+  template sends a confirmation *link* that resolves against Site URL, which on this
+  project is http://localhost:3000 — a dead address on a phone. A user who taps it
+  gets an error page and concludes the app is broken. The code is the whole
+  mechanism, so the email contains only the code.
+
+  {{ .Token }} is the numeric code. Its length is a project setting
+  (auth.email.otp_length, currently 8), which is why the app accepts 6-10 digits
+  rather than assuming.
+
+  Copy rule (spec §11): no health claim anywhere in this email.
+-->
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px; color: #1a1a1a;">
+  <h1 style="font-size: 20px; font-weight: 600; margin: 0 0 8px;">Your Zenoho code</h1>
+
+  <p style="font-size: 15px; line-height: 22px; color: #3a3a3a; margin: 0 0 24px;">
+    Enter this code in the Zenoho app to finish setting up your account.
+  </p>
+
+  <p style="font-size: 34px; font-weight: 600; letter-spacing: 8px; margin: 0 0 24px; font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;">
+    {{ .Token }}
+  </p>
+
+  <p style="font-size: 14px; line-height: 20px; color: #6b6b6b; margin: 0 0 8px;">
+    The code expires in an hour and can be used once.
+  </p>
+
+  <p style="font-size: 14px; line-height: 20px; color: #6b6b6b; margin: 0;">
+    If you did not sign up for Zenoho, you can ignore this email — nobody can get into
+    your account without this code.
+  </p>
+</div>
