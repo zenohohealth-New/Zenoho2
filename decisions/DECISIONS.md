@@ -321,6 +321,24 @@ Supersedes the T-003 open item on clock skew, which is replaced by: report the d
 `device_clock_offset_min`.
 Status: DECIDED
 
+## D-035 · 2026-09-08 · Legacy Supabase project found and left alone
+The first Supabase project connected on 2026-09-08 contained a legacy Zenoho schema
+(marker_results 135 rows, panels, analysis_failures, domains, markers, systems, profiles),
+created 2026-06-14. Zenoho2 moved to a fresh project the same day. The legacy project was left
+untouched; it may contain real health data and is not ours to delete.
+
+Detail, so this is not rediscovered: the collision was found by querying the live database after
+applying migration 0001, not by reading a file. Zenoho2's four tables (users, commitments,
+daily_states, push_tokens) applied cleanly alongside the legacy ones and were correctly
+isolated — RLS enabled and forced, no anon policy — so nothing was broken. The objection is
+D-000, not correctness: Zenoho2 is a clean-room restart and must not share a database with a
+prior attempt's data.
+
+Nothing in the legacy project was dropped, altered or exported. The migration Zenoho2 applied
+there remains, as do its four empty tables; removing them would itself be a modification, and
+the ruling was to leave the project alone.
+Status: DECIDED
+
 ---
 
 ## FINDINGS LOG — 2026-09-07 (evidence, not decisions)
