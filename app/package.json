@@ -32,7 +32,9 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "check:manifest": "node scripts/check-manifest.mjs"
+    "check:manifest": "node scripts/check-manifest.mjs",
+    "eas-build-post-install": "node scripts/check-env.mjs",
+    "check:env": "node -r ./scripts/load-env.cjs scripts/check-env.mjs"
   },
   "private": true
 }

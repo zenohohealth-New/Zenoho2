@@ -361,6 +361,36 @@ Open: who owns `gsfjloiquddelmiaajtt`, and whether the Zenoho2 tables left in `d
 should eventually be removed by whoever does own it. Not Zenoho2's to decide (D-000).
 Status: DECIDED (amended)
 
+## D-036 · (no decision recorded)
+The founder's ruling below was numbered D-037, leaving this id unused. Flagged rather than
+assumed deliberate: this is the fourth such gap, and two of the previous three — D-015 and
+D-021 — turned out to be real decisions taken in chat and never written down. D-033 was the
+third and was later filled in. If D-036 was decided somewhere, record it here; otherwise retire
+the number.
+Status: OPEN (clerical)
+
+## D-037 · 2026-09-08 · Public config lives in EAS environment variables
+Public config (Supabase URL, publishable key) lives in EAS environment variables per build
+profile; `app/.env` is for local dev only; a build-time check enforces presence.
+
+Why, from the failure that produced it: preview APK `f815ea27` was built in the EAS cloud, which
+never receives the gitignored `app/.env`. The build succeeded, the APK installed, and the app
+then reported "Backend is not configured: EXPO_PUBLIC_SUPABASE_URL is missing" on the device.
+Every local gate was green throughout, because on the dev machine the values were present.
+
+Both values are set `plaintext` for the development, preview and production environments. That
+visibility is correct rather than lax: the URL appears in every request and the publishable key
+is inlined into every APK, so neither is secret. They are protected by row-level security. The
+`sb_secret_` key is a different matter and must never be set as an EAS variable at all — the
+build check rejects it explicitly, because inlining it would hand every APK holder a
+key that bypasses RLS.
+
+Enforcement: `app/scripts/check-env.mjs`, wired to the `eas-build-post-install` hook so it runs
+in the cloud where the gap exists, and available locally as `npm run check:env`. It fails on a
+missing value, an unfilled `<...>` template, a secret key, a legacy anon JWT, and a malformed
+project URL. All five modes were verified to fail before this was recorded.
+Status: DECIDED
+
 ---
 
 ## FINDINGS LOG — 2026-09-07 (evidence, not decisions)
