@@ -30,6 +30,7 @@ interface Props {
   readonly onEditCommitment: () => void;
   /** Long-press the title to reach the T-001 harness (D-022). */
   readonly onOpenHarness: () => void;
+  readonly onOpenSettings: () => void;
 }
 
 export function HistoryScreen(p: Props) {
@@ -119,6 +120,10 @@ export function HistoryScreen(p: Props) {
 
       <Pressable style={t.buttonGhost} onPress={p.onEditCommitment} disabled={p.busy}>
         <Text style={t.buttonGhostText}>Change my promise</Text>
+      </Pressable>
+
+      <Pressable style={t.buttonGhost} onPress={p.onOpenSettings} disabled={p.busy}>
+        <Text style={t.buttonGhostText}>Settings</Text>
       </Pressable>
 
       <Text style={t.footnote}>

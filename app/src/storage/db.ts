@@ -61,6 +61,17 @@ const MIGRATIONS: readonly string[] = [
      key   TEXT PRIMARY KEY NOT NULL,
      value TEXT NOT NULL
    );`,
+
+  // 4 — T-003 sync queue. A night is enqueued when it is derived and removed once
+  // the server has it, so a derivation made offline is not lost (AC-3.6). Holds
+  // only the spec §7 payload: no raw health data reaches this table either.
+  `CREATE TABLE IF NOT EXISTS sync_queue (
+     night_date  TEXT PRIMARY KEY NOT NULL,
+     payload     TEXT NOT NULL,
+     queued_at   INTEGER NOT NULL,
+     attempts    INTEGER NOT NULL DEFAULT 0,
+     last_error  TEXT
+   );`,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

@@ -8,7 +8,7 @@
  * Copy rule (spec §11) applies to every string reachable from here.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Text, View } from 'react-native';
+import { ActivityIndicator, Share, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 
 import { localDateKey } from './src/derive';
@@ -33,7 +33,19 @@ import {
   requestNotificationPermission,
   scheduleMorningSync,
 } from './src/engine/morningSync';
+import { getSupabase, readBackendEnv } from './src/backend/client';
+import {
+  deleteAccount,
+  drainQueue,
+  ensureRemoteCommitment,
+  exportOwnRows,
+  queueNight,
+} from './src/backend/sync';
+import { pendingCount } from './src/backend/syncQueue';
+import { KEY_CLOCK_OFFSET_MIN, kvGetNumber } from './src/storage/kv';
 import { CommitmentScreen } from './src/ui/CommitmentScreen';
+import { SignInScreen } from './src/ui/SignInScreen';
+import { SettingsScreen } from './src/ui/SettingsScreen';
 import { HistoryScreen } from './src/ui/HistoryScreen';
 import { HarnessScreen } from './src/ui/HarnessScreen';
 import { colors, t } from './src/ui/theme';
@@ -47,7 +59,17 @@ const STARTING_COMMITMENT: Commitment = {
 
 const rhrLocalStore = new SqliteRhrHistoryStore();
 
-type Route = 'loading' | 'commitment' | 'history' | 'harness';
+type Route = 'loading' | 'signin' | 'commitment' | 'history' | 'harness' | 'settings';
+
+/** True when the backend env is filled in. Absent env keeps the app local-only. */
+function backendConfigured(): boolean {
+  try {
+    readBackendEnv();
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export default function App() {
   const [route, setRoute] = useState<Route>('loading');
@@ -59,6 +81,9 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [email, setEmail] = useState<string | null>(null);
+  const [pendingSync, setPendingSync] = useState(0);
+  const [clockOffsetMin, setClockOffsetMin] = useState<number | null>(null);
 
   const tzOffsetMin = useMemo(() => -new Date().getTimezoneOffset(), []);
 
@@ -112,6 +137,25 @@ export default function App() {
         }
 
         await refreshSummary(c.id);
+
+        // Sync is best-effort and never blocks the local result: the server is a
+        // mirror, local stays the source of truth for display (T-003 deliverable 4).
+        if (backendConfigured() && outcome !== null) {
+          try {
+            const { data } = await getSupabase().auth.getUser();
+            if (data.user) {
+              const remoteId = await ensureRemoteCommitment(c);
+              await queueNight(outcome.stored, remoteId);
+              await drainQueue();
+            }
+          } catch {
+            // Offline, signed out, or refused: the night stays queued for the
+            // next foreground (AC-3.6). Not surfaced as an error, because the
+            // night itself was derived and stored perfectly well.
+          }
+          setPendingSync(await pendingCount());
+          setClockOffsetMin(await kvGetNumber(KEY_CLOCK_OFFSET_MIN));
+        }
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
       } finally {
@@ -191,11 +235,86 @@ export default function App() {
     [refreshSummary, sync],
   );
 
+  const sendCode = useCallback(async (addr: string) => {
+    const { error: e } = await getSupabase().auth.signInWithOtp({
+      email: addr,
+      options: { shouldCreateUser: true },
+    });
+    if (e) throw new Error(e.message);
+  }, []);
+
+  const verifyCode = useCallback(
+    async (addr: string, code: string) => {
+      const { error: e } = await getSupabase().auth.verifyOtp({
+        email: addr,
+        token: code,
+        type: 'email',
+      });
+      if (e) throw new Error(e.message);
+      setEmail(addr);
+      setRoute(commitment === null ? 'commitment' : 'history');
+      if (commitment !== null) await sync(commitment);
+    },
+    [commitment, sync],
+  );
+
+  const handleExport = useCallback(async () => {
+    const rows = await exportOwnRows();
+    await Share.share({
+      title: 'Zenoho data export',
+      message: JSON.stringify(rows, null, 2),
+    });
+  }, []);
+
+  const handleSignOut = useCallback(async () => {
+    await getSupabase().auth.signOut();
+    setEmail(null);
+    setRoute('signin');
+  }, []);
+
+  const handleDelete = useCallback(async () => {
+    await deleteAccount();
+    setEmail(null);
+    setCommitment(null);
+    setNights([]);
+    setRoute('signin');
+  }, []);
+
   if (route === 'loading') {
     return (
       <View style={[t.screen, { alignItems: 'center', justifyContent: 'center' }]}>
         <StatusBar style="auto" />
         <ActivityIndicator color={colors.ink} />
+      </View>
+    );
+  }
+
+  if (route === 'signin') {
+    return (
+      <View style={t.screen}>
+        <StatusBar style="auto" />
+        <SignInScreen
+          onSendCode={sendCode}
+          onVerify={verifyCode}
+          onSkip={() => setRoute(commitment === null ? 'commitment' : 'history')}
+        />
+      </View>
+    );
+  }
+
+  if (route === 'settings' && commitment !== null) {
+    return (
+      <View style={t.screen}>
+        <StatusBar style="auto" />
+        <SettingsScreen
+          email={email}
+          pendingSync={pendingSync}
+          clockOffsetMin={clockOffsetMin}
+          onSignOut={handleSignOut}
+          onExport={handleExport}
+          onDelete={handleDelete}
+          onClose={() => setRoute('history')}
+        />
       </View>
     );
   }
@@ -255,6 +374,7 @@ export default function App() {
         onRefresh={() => void sync(commitment)}
         onEditCommitment={() => setRoute('commitment')}
         onOpenHarness={() => setRoute('harness')}
+        onOpenSettings={() => setRoute('settings')}
       />
     </View>
   );

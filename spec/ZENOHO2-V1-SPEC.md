@@ -1,7 +1,7 @@
 # ZENOHO2 — V1 SPECIFICATION
 
 Version 1.0 · 2026-09-07 · Author: Claude Web (checker) · Owner: Founder
-Governing decisions: decisions/DECISIONS.md D-001 … D-019. Where this spec and the log disagree, the log wins.
+Governing decisions: decisions/DECISIONS.md D-001 … D-034. Where this spec and the log disagree, the log wins.
 
 ## 1. One-line product
 
@@ -85,13 +85,18 @@ pod_members(pod_id, user_id, role{creator,member}, witness_user_id, joined_at, l
 commitments(id, user_id, pod_id, cycle_no, bed_target, wake_target, tolerance_min, created_at)
 daily_states(id, commitment_id, night_date, state{KEPT,MISSED,NO_DATA,TRAVEL},
              integrity{OK,UNVERIFIED,NO_SOURCE,NO_WEAR,TRAVEL}, source_id, wear_presence bool,
-             deviation_min int, computed_at, frozen bool)   UNIQUE(commitment_id, night_date)
+             deviation_min int, computed_at, frozen bool,
+             device_clock_offset_min int)   UNIQUE(commitment_id, night_date)
 reactions(id, from_user_id, to_user_id, night_date, kind{NOD,NUDGE}, created_at)
              UNIQUE(from_user_id, to_user_id, night_date)
 checkins(id, user_id, pod_id, cycle_no, week_no, mood{FINE,STRUGGLING}, note, created_at)
 invites(token, pod_id, created_by, expires_at, used_by)
 push_tokens(user_id, token, platform)
 ```
+`computed_at` is set by the server (`timestamptz DEFAULT now()`), never sent by the client.
+`device_clock_offset_min` is whole minutes of device-minus-server time from a one-time probe —
+it exists so clock skew can be measured without a timestamp ever crossing the wire (D-034).
+
 Row-level security: a user reads own rows; witness reads `state` and `checkins.note` of assigned members only via a view that excludes deviation/integrity; pod members read the aggregate via a view. No client can read `daily_states` of non-assigned users.
 
 ## 9. Eligible source allow-list (v1; extend by evidence)

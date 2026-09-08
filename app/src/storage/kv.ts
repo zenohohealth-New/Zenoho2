@@ -14,6 +14,10 @@ import { getDb } from './db';
 export const KEY_MORNING_NEXT_AT = 'morning_sync.next_at';
 export const KEY_MORNING_LAST_FIRED = 'morning_sync.last_fired';
 export const KEY_MORNING_LAST_SCHEDULED = 'morning_sync.last_scheduled';
+/** D-034: whole minutes, device minus server, from a one-time probe. */
+export const KEY_CLOCK_OFFSET_MIN = 'clock.offset_min';
+/** The server-side commitment id this device's local commitment maps to. */
+export const KEY_REMOTE_COMMITMENT_ID = 'sync.remote_commitment_id';
 
 export async function kvGet(key: string): Promise<string | null> {
   const db = await getDb();

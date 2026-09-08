@@ -1,10 +1,18 @@
 /**
- * Runtime guard behind the upload boundary (D-010, AC-9).
+ * Runtime guard on everything the app sends (D-010, AC-9, AC-3.4).
  *
- * `toServerRow` already whitelists fields; this is the belt to that pair of
- * braces. It inspects an outgoing body and throws if anything in it looks like a
- * raw health value — a timestamp precise enough to be a sleep time, or a number
- * in heart-rate range sitting under a suspicious key.
+ * Two independent rules, both absolute:
+ *
+ *  1. **Host.** Once a backend host is registered, requests to any other host are
+ *     refused. There is exactly one place data may go.
+ *  2. **Body.** No forbidden key, no ISO instant, no epoch-millisecond integer —
+ *     ever, with no exemptions.
+ *
+ * Rule 2 has no allow-list on purpose (D-034). `computed_at` would have been the
+ * first exemption, and the invariant is worth more than the convenience: "this
+ * payload contains no timestamp" is checkable by inspection, while "contains no
+ * timestamp except the permitted ones" is an argument. Clock skew is measured
+ * instead with `device_clock_offset_min`, a plain integer count of minutes.
  */
 
 /** Keys that may never appear in an outgoing body, at any depth. */
@@ -17,16 +25,21 @@ export const FORBIDDEN_KEYS: readonly string[] = [
   'endTime',
   'startDate',
   'endDate',
+  'sleep_start',
+  'sleep_end',
   'sessions',
   'hr',
   'samples',
   'heartRate',
   'restingBpm',
+  'resting_bpm',
   'rhrHistory',
   'bedTargetMin',
   'wakeTargetMin',
   'bedDevMin',
   'wakeDevMin',
+  'computedAt',
+  'computed_at',
 ];
 
 /** ISO 8601 instants and epoch-millisecond integers both count as timestamps. */
@@ -37,6 +50,44 @@ export class RawHealthLeakError extends Error {
   constructor(readonly detail: string) {
     super(`Refused to send raw health data: ${detail}`);
     this.name = 'RawHealthLeakError';
+  }
+}
+
+export class ForbiddenHostError extends Error {
+  constructor(readonly host: string) {
+    super(`Refused to send to an unapproved host: ${host}`);
+    this.name = 'ForbiddenHostError';
+  }
+}
+
+let allowedOrigin: string | null = null;
+
+/**
+ * Register the one origin the app may talk to, from `EXPO_PUBLIC_SUPABASE_URL`.
+ * Called once at startup. Until it is called, every request is refused.
+ */
+export function setAllowedOrigin(url: string): void {
+  allowedOrigin = new URL(url).origin;
+}
+
+export function getAllowedOrigin(): string | null {
+  return allowedOrigin;
+}
+
+/** Test seam. */
+export function __resetAllowedOriginForTests(): void {
+  allowedOrigin = null;
+}
+
+export function assertAllowedHost(input: string): void {
+  let origin: string;
+  try {
+    origin = new URL(input).origin;
+  } catch {
+    throw new ForbiddenHostError(input);
+  }
+  if (allowedOrigin === null || origin !== allowedOrigin) {
+    throw new ForbiddenHostError(origin);
   }
 }
 
@@ -73,16 +124,36 @@ export function assertNoRawHealth(body: unknown, path = ''): void {
 }
 
 /**
- * `fetch` with the guard welded on. Application code must use this; calling the
- * global `fetch` directly for health data is the bug this exists to prevent.
+ * The `fetch` the Supabase client is given, and the only one application code
+ * should use. Checks host and body before anything leaves.
+ *
+ * Note it inspects the *serialised* body Supabase produces, not a hand-built
+ * object — so it guards what actually goes out, including anything a library
+ * might add on the way.
  */
-export async function guardedFetch(
-  input: string,
-  init?: { method?: string; headers?: Record<string, string>; body?: unknown },
-): Promise<Response> {
-  if (init?.body !== undefined) assertNoRawHealth(init.body);
-  return fetch(input, {
-    ...init,
-    body: init?.body === undefined ? undefined : JSON.stringify(init.body),
-  } as RequestInit);
-}
+export const guardedFetch: typeof fetch = async (input, init) => {
+  const url =
+    typeof input === 'string'
+      ? input
+      : input instanceof URL
+        ? input.toString()
+        : (input as Request).url;
+
+  assertAllowedHost(url);
+
+  const body = init?.body;
+  if (typeof body === 'string' && body.length > 0) {
+    try {
+      assertNoRawHealth(JSON.parse(body) as unknown);
+    } catch (e) {
+      if (e instanceof RawHealthLeakError) throw e;
+      // Not JSON (multipart, plain text): scan the raw text instead of skipping.
+      assertNoRawHealth(body);
+    }
+  } else if (body !== undefined && body !== null && typeof body !== 'string') {
+    // Anything non-string is not something this app should be sending.
+    throw new RawHealthLeakError('non-string request body');
+  }
+
+  return fetch(input, init);
+};

@@ -269,6 +269,44 @@ Consequence for everyone working in this repo: history rewrites invalidate exist
 clone taken before this point must be re-cloned, not pulled.
 Status: DECIDED
 
+## D-031 · 2026-09-08 · Backend provider
+Supabase, region **ap-south-1 (Mumbai)**. Rationale: managed Postgres + auth + RLS + edge
+functions + pg_cron in one free-tier project; Mumbai region keeps health-derived data in India
+(DPDP posture); no server process for a solo founder.
+The publishable key is public by design and lives in `app/.env` only; the service-role / secret
+key never leaves the Supabase dashboard and edge-function secrets. Recorded by T-003.
+Note on key type: the new-style `sb_publishable_…` key is used, not the legacy anon JWT.
+Status: DECIDED
+
+## D-032 · 2026-09-08 · Sign-in method
+Email one-time code (Supabase email OTP). No phone OTP (needs a paid SMS provider), no Google
+sign-in in v1 (OAuth client setup is pure friction for 5–8 gym users). Display name only; no
+profile photo. Recorded by T-003.
+Status: DECIDED
+
+## D-033 · (no decision recorded)
+T-003 recorded D-031 and D-032, and the founder's ruling below was numbered D-034, leaving this
+id unused. Flagged rather than assumed deliberate: this is the third such gap, and the previous
+two — D-015 and D-021 — both turned out to be real decisions taken in chat and never written
+down. If D-033 was decided somewhere, record it here; otherwise retire the number.
+Status: OPEN (clerical)
+
+## D-034 · 2026-09-08 · Clock skew is measured without sending a timestamp
+The server sets `daily_states.computed_at` itself (`timestamptz DEFAULT now()`). The client
+sends `device_clock_offset_min` — an integer, whole minutes, device time minus server time,
+taken from a one-time server-time probe.
+Why: the network guard's invariant is absolute — no epoch-ms values, no ISO instants, ever —
+and that invariant is what makes AC-9 provable by inspection rather than by argument. Sending
+`computed_at` from the device would have required a first exemption, after which every later
+exemption gets easier to argue for. Measuring skew is worth doing; it is not worth spending the
+property that makes the privacy claim checkable.
+Consequences: spec §8 gains `device_clock_offset_min` on `daily_states`. AC-3.4 stands as
+written. The server timestamp is also the more trustworthy one — a client cannot misreport when
+it derived a night.
+Supersedes the T-003 open item on clock skew, which is replaced by: report the distribution of
+`device_clock_offset_min`.
+Status: DECIDED
+
 ---
 
 ## FINDINGS LOG — 2026-09-07 (evidence, not decisions)
