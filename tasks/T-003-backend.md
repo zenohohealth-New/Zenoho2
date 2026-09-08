@@ -1,14 +1,12 @@
 # T-003 · Backend: identity, sync of derived states, privacy enforcement
 
 Status: IN_REVIEW · Owner: Claude Code (maker) · Reviewer: Claude Web (checker)
-Report: reports/R-003-backend.md (2026-09-08). Code-complete and evidence-empty: migrations,
-RLS, edge function, auth, sync and screens are written; 127 tests, typecheck, lint and
-check:manifest clean. NONE of AC-3.1..AC-3.9 is verified — all need a live connection and the
-publishable key in app/.env is still the unfilled placeholder. AC-3.4 is half met (test only).
-Only the checker marks this DONE.
-Spec: spec/ZENOHO2-V1-SPEC.md §7, §8, §11 (Settings only), §13 AC-3, AC-7, AC-9, §14
-Decisions: D-007, D-010, D-011, D-020, D-023, D-025, D-027, D-030
-Prereq (founder): a Supabase project exists and its URL + anon key are in `app/.env` (never in chat, never committed).
+Report: reports/R-003-backend.md (2026-09-08). Backend applied and verified on Zenoho2-new:
+schema matches spec 7 + D-034, RLS 8/8 against the live database, delete-account deployed with
+its secrets. AC-3.3 and AC-3.9 MET; AC-3.2, AC-3.4, AC-3.8 PARTIAL; AC-3.1, AC-3.5, AC-3.6,
+AC-3.7 NOT VERIFIED. All four application tables hold zero rows - the app has never
+successfully written to the server. Device run withheld under D-038 pending the auth email
+templates and, ideally, custom SMTP (D-039). Only the checker marks this DONE.
 
 ## Goal
 The app gets an identity and a server, and the server learns only what spec §7 allows. After this task a user can sign in, their derived nights sync up, they can export and delete everything, and a test proves that no raw sleep or heart-rate value can reach the server and that no user can read another user's rows. Pods, witnesses and reactions are NOT in this task (T-004).

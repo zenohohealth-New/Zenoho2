@@ -5,23 +5,30 @@ Spec sections read: §7, §8, §11, §13, §14 · Decisions: D-007, D-010, D-011
 D-025, D-027, D-030, and D-031/D-032/D-034 recorded here
 Date: 2026-09-08
 
-> **Headline for the checker: none of the nine acceptance criteria has been verified.** Every
-> one of AC-3.1 through AC-3.9 needs a live Supabase connection, and the publishable key in
-> `app/.env` is still the unfilled template — 48 characters beginning `<sb_`, angle brackets
-> included. The code, the migrations and the edge function are complete and every local gate is
-> green (127 tests, typecheck, lint, manifest check), but **green gates here mean the code
-> compiles and reasons correctly, not that the backend works.** Given that two of three T-001
-> device runs failed on integration facts invisible to exactly these gates, treat this report as
-> a design review, not a delivery.
+> **Headline for the checker: the backend is real and proven; the app has never
+> successfully talked to it.**
+>
+> Server-side is done and verified against the live Mumbai project — schema applied, RLS proven
+> 8/8 by a suite that runs against the real database, edge function deployed with its secrets in
+> place. **AC-3.3 and AC-3.9 are MET.**
+>
+> App-side, no acceptance criterion involving a round trip has been demonstrated. As of this
+> report the four application tables hold **zero rows**: nothing the app produced has ever
+> reached the server. Three device runs were consumed by defects rather than evidence, and the
+> fourth is deliberately withheld under D-038 until the auth email templates are confirmed.
+>
+> Status IN_REVIEW rather than IN_REVIEW-COMPLETE, and the gap is evidence, not code.
 
 ---
 
 ## 1. What changed
 
 **Decisions.** D-031 (Supabase, ap-south-1 Mumbai) and D-032 (email OTP) recorded as the task
-specified. D-034 records the founder's ruling on clock skew. A **D-033 gap** is flagged rather
-than assumed deliberate — this is the third such gap, and the previous two, D-015 and D-021,
-both turned out to be real decisions taken in chat and never written down.
+specified. D-034 records the founder's ruling on clock skew. Later in the task: D-035 (legacy
+project found and left alone), D-037 (public config in EAS env vars), D-038 (prove it before a
+device run — wording drafted by me, the text was never supplied) and D-039 (custom SMTP).
+D-033 was a numbering gap and has since been filled in; **D-036 remains one**, with no text in
+any message, and is left open rather than invented.
 
 **Spec §8** gains `daily_states.device_clock_offset_min`, with a note that `computed_at` is
 server-set and never sent by the client.
@@ -55,8 +62,9 @@ server and one place offline behaviour lives (AC-3.6). The queue is keyed by nig
 server upsert is on `(commitment_id, night_date)`, so re-deriving replaces rather than duplicates
 and draining twice is harmless.
 
-**Screens.** Sign-in (email → 6-digit code) and Settings (sign out, export, delete, and the
-D-027 "what leaves this phone" paragraph).
+**Screens.** Sign-in (email → numeric code; length is a project setting, so the screen accepts
+6–10 digits rather than assuming) and Settings (sign in when signed out; sign out, export and
+delete when signed in, plus the D-027 "what leaves this phone" paragraph).
 
 ---
 
@@ -83,12 +91,14 @@ apart.
 
 | Gate | Command | Result |
 |---|---|---|
-| Unit + fixtures | `npm test` | **127 passed, 2 skipped**, 10 files |
+| Unit + fixtures | `npm test` | **136 passed, 2 skipped**, 11 files |
 | Typecheck | `npm run typecheck` | **clean** |
 | Lint | `npm run lint` | **clean** |
 | Manifest permissions | `npm run check:manifest` | **passes** |
-| **Live backend** | — | **NOT RUN — no usable key** |
-| Preview APK | — | **not built for T-003** (built for T-002 as `83941541`) |
+| Backend config | `npm run check:env` | **passes**; 5 failure modes each verified to fail |
+| RLS on live project | `supabase db query --file backend/tests/rls_denial.sql` | **8/8 ALL PASS** |
+| **Live backend** | `supabase db push`, `functions deploy`, `db query` | **applied and verified on Zenoho2-new** |
+| Preview APK | `eas build --profile preview` | **built** — latest `e1a3bdd4` |
 
 **`tests/no-network.test.ts` was rewritten, not deleted.** I flagged this in advance last
 session: T-003 makes the T-002 invariant ("nothing in the app reaches the upload boundary") false
@@ -111,12 +121,13 @@ tightened the tests rather than loosening the assertions.
 
 ## 4. Tests passed / failed
 
-**Passed: 127. Failed: 0. Skipped: 2** (the Layer 2 manifest assertions, covered by
+**Passed: 136. Failed: 0. Skipped: 2** (the Layer 2 manifest assertions, covered by
 `npm run check:manifest`).
 
 The honest reading: this suite proves the payload whitelist, the guard's two rules, the queue's
-shape and the sync logic's branching. It proves **nothing** about Postgres, RLS, auth, or the
-edge function, because none of those ran.
+shape and the sync logic's branching. RLS is proven separately and for real, by the SQL suite
+against the live database. What remains unproven by any of it is **auth, and every round trip
+the app makes** — none of that has executed once.
 
 ---
 
@@ -144,20 +155,26 @@ edge function, because none of those ran.
 
 ## 6. Unresolved issues
 
-1. **Nothing is verified.** See §9. This is the whole of the risk in this report.
-2. **AC-3.3 wants an RLS denial test against a real instance.** That needs credentials at test
-   time, in a public repo, which means either a local Supabase CLI instance in CI or an
-   env-gated test that skips when absent. A skipping test is not a gate. **I have not written it
-   yet** — writing it against an API I cannot run would produce a test that passes for the wrong
-   reasons. Recommend: local Supabase CLI, so it runs everywhere without secrets.
-3. **The migration has never been applied.** It is plain SQL and reads correctly, but "reads
-   correctly" is what T-002 said about the SQLite layer that then needed a device run to prove.
-4. **Email OTP deliverability is unmeasured** (task open item) — no email has been sent.
+1. **The app has never reached the server.** See §9: four empty tables. Everything between
+   `queueNight` and a row appearing is unexercised — the sync queue, the drain, the upsert, the
+   commitment bootstrap, the clock probe. That is the whole of the risk in this report.
+2. ~~AC-3.3 wants an RLS denial test against a real instance.~~ **CLOSED.**
+   `backend/tests/rls_denial.sql` runs against the live project, impersonates two users the way
+   PostgREST does, and rolls back. It opens by asserting the seed row is visible to the owner,
+   so a later "0 rows" means denial rather than an empty table. It is not yet wired into CI,
+   because it needs project credentials a public repo cannot hold.
+3. ~~The migration has never been applied.~~ **CLOSED** — applied to Zenoho2-new and verified
+   by querying the live database, not by re-reading the file.
+4. **Email OTP deliverability is unmeasured** (task open item). Rate limit now known: 2/hour
+   (D-039). Whether a code actually arrives, and in inbox or spam, is untested.
 5. **`frozen` server-side enforcement** (task open item, recommend-only): **recommended.** A
    trigger rejecting updates to a row already `frozen = true` is about ten lines, and without it
    the freeze rule is a client-side convention that any client build can ignore. Not implemented,
    per the task.
-6. **The `device_clock_offset_min` distribution** cannot be reported until nights sync.
+6. **The `device_clock_offset_min` distribution** cannot be reported until nights sync — no
+   night has synced.
+7. **D-036 has no text in any message**, and D-038's wording is my draft. Both flagged in the
+   decision log rather than invented.
 
 ---
 
@@ -203,25 +220,69 @@ edge function, because none of those ran.
 
 ## 9. Devices used (physical, with OS version)
 
-| Platform | Device | State |
-|---|---|---|
-| Android | **Samsung Galaxy S26 Ultra**, Android 16 / One UI 8.5 (D-014) | **no T-003 build, no T-003 device run** |
-| iOS | none | **DEFERRED** (D-013, and unshippable per D-021) |
+| | |
+|---|---|
+| Device | **Samsung Galaxy S26 Ultra**, Android 16 / One UI 8.5, build `BP4A.251205.006` (D-014) |
+| Backend | Supabase **Zenoho2-new** `kjmaivclilrovfvqvjqr`, ap-south-1 (D-031, D-035) |
+| iOS | none — **DEFERRED** (D-013), and unshippable until an Apple account exists (D-021) |
+
+### Build and run log
+
+| Build | Outcome |
+|---|---|
+| `a2e8fccc` | **Halted on three defects.** No sign-in path anywhere in the app; stale Home copy claiming Zenoho "sends nothing anywhere", false since T-003; morning-sync verdict reporting MISSED for a notification that had actually fired. All three fixed. |
+| `f815ea27` | **Unusable.** Reported "Backend is not configured" on the device: EAS cloud builds never receive the gitignored `app/.env`. Fixed by D-037. |
+| `9f5be4d2` | Config loaded correctly. Not exercised — pre-flight found the OTP defect below before a run was attempted. |
+| `e1a3bdd4` | Current build. **Not yet run**, withheld under D-038. |
+
+### What the server says, which is the part that matters
+
+```
+users 0 · commitments 0 · daily_states 0 · push_tokens 0     (auth.users: 1)
+```
+
+One auth user exists, from a code request at some point. **Every application table is empty.**
+No commitment, no night, no row of any kind has been written by the app. That single fact is
+the honest summary of app-to-server progress.
+
+### Acceptance criteria
 
 | Criterion | State |
 |---|---|
-| AC-3.1 sign in, persists across kill | **NOT VERIFIED** |
-| AC-3.2 row exists with exactly the §7 columns | **NOT VERIFIED** |
-| AC-3.3 RLS denial against a real instance | **NOT VERIFIED — test not yet written** (§6.2) |
-| AC-3.4 guard: bad body and bad host rejected | **half met** — proven by test; live half outstanding |
-| AC-3.5 intercept a full session on device | **NOT VERIFIED** |
-| AC-3.6 offline derive syncs unattended | **NOT VERIFIED** |
-| AC-3.7 export is own rows, §7 columns only | **NOT VERIFIED** |
-| AC-3.8 delete is complete and idempotent | **NOT VERIFIED** |
-| AC-3.9 anon can read nothing | **NOT VERIFIED** |
+| **AC-3.1** sign in, persists across kill | **NOT VERIFIED** — sign-in has never succeeded |
+| **AC-3.2** row exists with exactly the §7 columns | **PARTIAL.** The *schema* is verified from the live database: `daily_states` = id, commitment_id, night_date, state, integrity, source_id, wear_presence, deviation_min, frozen, device_clock_offset_min, computed_at — exactly §7 plus D-034, with no user_id and no raw health column. No row has been written, so the write path is unproven. |
+| **AC-3.3** RLS denial on a real instance | **MET** — 8/8, `backend/tests/rls_denial.sql` |
+| **AC-3.4** guard rejects bad body and bad host | **PARTIAL** — 17 tests pass; the live half needs a real request |
+| **AC-3.5** intercept a full session | **NOT VERIFIED** |
+| **AC-3.6** offline derive syncs unattended | **NOT VERIFIED** |
+| **AC-3.7** export is own rows, §7 columns only | **NOT VERIFIED** |
+| **AC-3.8** delete is complete and idempotent | **PARTIAL** — the function is deployed and holds `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`; never invoked |
+| **AC-3.9** anon reads nothing | **MET** — part of the same 8/8 suite |
 
-**One of nine is half met. Nothing else in T-003 has been proven.** The task is code-complete and
-evidence-empty, and I would rather say so plainly than let a green gate table imply otherwise.
+Two met, three partial, four not verified.
 
-Status set to **IN_REVIEW**, not IN_REVIEW-COMPLETE: with §9 in this state there is nothing here
-a checker could responsibly sign off.
+### The D-038 pre-flight, which is why there was no fourth run
+
+Reading the live auth config rather than trusting the app found a blocker that would have
+consumed the entire email budget without a single successful sign-in:
+
+- **`auth.email.otp_length = 8`.** The sign-in screen hard-coded `/^\d{6}$/` *and* capped the
+  input at `maxLength={6}`, so the correct code could not even be typed. Fixed to accept 6–10
+  and let the server decide; OTP length is a project setting, and a client stricter than the
+  server about a value the server owns is a bug waiting for a config change.
+- **My first fix was silently wrong**, and worth recording because it is invisible on review:
+  written as ``new RegExp(`^\d{...}$`)``, the backslash is dropped inside a template literal,
+  yielding `/^d{6,10}$/` — which matches `"dddddd"` and no real code. Caught by executing the
+  pattern rather than reading it. It is now a literal and a test asserts it stays one.
+- **`auth.rate_limit.email_sent = 2` per hour**, only adjustable once custom SMTP is enabled.
+  Recorded as D-039; custom SMTP is required before any invite goes out.
+- **`enable_confirmations = true`**, so a new user receives *Confirm signup*, not *Magic Link*.
+  Fixing only one template would work for the founder and fail for every pod member.
+- **`site_url = http://localhost:3000`** — a dead address on a phone. Both templates in
+  `backend/templates/` therefore carry the code and no link at all.
+- **A cold-install dead-end**: Settings was gated on `commitment !== null`, so a signed-out user
+  with no commitment fell through to an endless spinner.
+
+Remaining before a run is worth spending: paste both templates, confirm a numeric code arrives,
+and ideally configure Resend so the 2/hour ceiling stops mattering.
+
