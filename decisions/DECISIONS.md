@@ -85,6 +85,13 @@ Status: DECIDED
 
 ## D-013 · 2026-09-07 · Development environment and platform order
 Windows dev machine; Android-first; iOS via EAS cloud build + TestFlight once an Apple Developer account exists — iOS testing deferred.
+Status note 2026-09-08 (see D-021): the founder has chosen an **Android-only launch**, and the
+Apple Developer Program purchase is deferred until a first iPhone user is identified. "iOS
+testing deferred" therefore now means deferred indefinitely rather than merely until hardware
+is available: with no paid account there is no TestFlight and no ad-hoc build, so iOS cannot be
+distributed to anyone at all. The iOS bridge continues to be kept compiling (it typechecks in
+every run), which is cheap; it should not be extended further until the account exists and
+there is a way to run it.
 Status: DECIDED
 
 ## D-014 · 2026-09-07 · First test device
@@ -155,14 +162,26 @@ can never accumulate. One store rather than several keeps the purge auditable in
 D-010 unchanged: nothing in this database is ever uploaded.
 Status: DECIDED
 
-## D-021 · 2026-09-07 · Buy both store accounts
-Google Play Console (₹2,000 one-time) and Apple Developer Program (~₹9,000/yr), purchased
-08 Sep 2026. Rationale: sideloading works for Android today but Google's developer-identity
-verification for sideloaded apps rolls out through September 2026, and iOS has no sideload path
-at all — TestFlight requires the paid account. Buying both removes every distribution
-constraint and starts the Health Connect declaration clock (~7 days approval + 5–7 business
-days propagation).
-Status: DECIDED
+## D-021 · 2026-09-07 · Store accounts — Play bought, Apple deferred
+AMENDED 2026-09-08. As originally recorded this said "buy both store accounts". Only one was
+bought.
+
+**Google Play Console** (₹2,000 one-time): account created 08 Sep 2026; developer-identity
+verification pending, expected to take a few days. Nothing that depends on the Play listing can
+start until it clears — including the Health Connect declaration, whose own clock is ~7 days
+approval plus 5–7 business days propagation on top. Sideloading is unaffected and still works
+today (see the 2026-09-07 findings log).
+
+**Apple Developer Program** (~₹9,000/yr): **DEFERRED**. The founder chose an Android-only
+launch. Purchase when the first iPhone user is actually identified, not before — it is a
+recurring cost against a platform with no user on it yet, and deferring it changes nothing
+about the Android path.
+
+Consequence, stated plainly so it is not rediscovered later: **iOS has no distribution route at
+all until that account exists.** There is no sideload path on iOS; TestFlight and ad-hoc both
+require the paid account. So the iOS bridge stays not merely untested but unshippable, and
+D-018 (iOS eligibility by device model) stays unimplemented. See D-013.
+Status: DECIDED (amended)
 
 ## D-022 · 2026-09-07 · Brand verification is evidence-gated
 No wearable brand is marked verified until its source string AND a non-zero wear ratio are
