@@ -1,11 +1,13 @@
 # T-002 · Local nightly engine (no backend)
 
-Status: IN_REVIEW · Owner: Claude Code (maker) · Reviewer: Claude Web (checker)
-Report: reports/R-002-local-engine.md (2026-09-07). Engine built; 105 tests, typecheck, lint
-and check:manifest clean. Device run done on the S26 Ultra (preview APK 69516f42):
-AC-2.1, AC-2.4, AC-2.5 MET; AC-2.2 NOT MET (6 nights with data, target >=7 — Health Connect
-holds only ~6 nights of Garmin history); AC-2.7 pending overnight; AC-2.3 and AC-2.6 half-met
-(test yes, device no). Only the checker marks this DONE.
+Status: IN_REVIEW-COMPLETE · Owner: Claude Code (maker) · Reviewer: Claude Web (checker)
+Report: reports/R-002-local-engine.md (2026-09-08). Engine built; 116 tests, typecheck, lint
+and check:manifest clean. Device runs on the S26 Ultra (preview APK 69516f42):
+AC-2.1, AC-2.4, AC-2.5 MET; AC-2.7 MET with a caveat (fired 08:05 for an 08:00 trigger under
+Samsung battery optimisation — platform behaviour, not a defect); AC-2.2 NOT MET (6 nights with
+data, target >=7 — Health Connect holds only ~6 nights of Garmin history); AC-2.3 and AC-2.6
+half-met (test yes, device no); AC-2.8 described with a real gap named.
+Only the checker marks this DONE.
 Spec: spec/ZENOHO2-V1-SPEC.md §4, §5, §6 (commitment only), §10 (morning push only), §11 (screens 4 and 6 in local form), §12
 Decisions: D-002, D-003, D-006, D-009, D-010, D-012, D-016, D-017, D-019, D-020, D-022, D-023
 Supersedes the earlier plan to do the backend second. Backend is now T-003.

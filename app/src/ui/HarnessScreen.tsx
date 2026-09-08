@@ -25,7 +25,7 @@ import { getHealthStore, type PermissionOutcome, type ReadIssue } from '../healt
 import { loadRhrHistory } from '../health/rhrHistory';
 import { SqliteRhrHistoryStore } from '../storage/sqliteRhrStore';
 import { countNights, purgeOldStates, putNight } from '../storage/dailyStateStore';
-import { scheduledMorningSyncCount } from '../engine/morningSync';
+import { morningSyncStatus, type MorningSyncStatus } from '../engine/morningSync';
 import { colors, t } from './theme';
 
 interface Probe {
@@ -77,6 +77,7 @@ export function HarnessScreen({ commitment, commitmentId, onClose }: Props) {
   const [busy, setBusy] = useState(true);
   const [forceFallback, setForceFallback] = useState(false);
   const [log, setLog] = useState<string[]>([]);
+  const [sync, setSync] = useState<MorningSyncStatus | null>(null);
 
   const tzOffsetMin = useMemo(() => -new Date().getTimezoneOffset(), []);
   const say = useCallback(
@@ -201,10 +202,20 @@ export function HarnessScreen({ commitment, commitmentId, onClose }: Props) {
     say(`retention: ${before} → seeded ${seeded} (${old}) → purged ${purged} → ${after}`);
   }, [commitmentId, tzOffsetMin, say]);
 
-  const showScheduled = useCallback(async () => {
-    const n = await scheduledMorningSyncCount();
-    say(`morning sync scheduled: ${n}`);
-  }, [say]);
+  // Button handler: a direct setState here is fine, it is not an effect body.
+  const refreshSyncStatus = useCallback(() => {
+    void morningSyncStatus().then(setSync);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void morningSyncStatus().then((s) => {
+      if (!cancelled) setSync(s);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const d = probe.derived?.night;
   const sleepReadFailed = probe.readErrors.some((e) => e.kind === 'sleep');
@@ -274,6 +285,22 @@ export function HarnessScreen({ commitment, commitmentId, onClose }: Props) {
       <Row label="RHR nights available" value={fmt(probe.rhrNights)} />
       <Row label="RHR from fallback" value={fmt(probe.rhrFallback)} />
 
+      <Text style={t.h2}>Morning sync</Text>
+      <Row label="Triggers armed" value={sync === null ? '—' : String(sync.scheduledCount)} />
+      <Row label="Next scheduled sync" value={stamp(sync?.nextAtMs ?? null)} />
+      <Row label="Last fired" value={stamp(sync?.lastFiredMs ?? null)} />
+      <Row label="Verdict" value={sync?.verdict.state ?? '—'} />
+      {sync !== null && sync.verdict.state === 'MISSED' && (
+        <View style={t.notice}>
+          <Text style={t.noticeTitle}>The reminder did not arrive</Text>
+          <Text style={t.noticeBody}>
+            Android may hold back or drop a scheduled reminder when battery use is
+            restricted. Nothing is lost — opening Zenoho any time in the day works
+            out the night just the same.
+          </Text>
+        </View>
+      )}
+
       <Text style={t.h2}>Acceptance tools</Text>
       <Pressable
         style={[t.buttonGhost, forceFallback && { borderColor: colors.accent }]}
@@ -286,8 +313,8 @@ export function HarnessScreen({ commitment, commitmentId, onClose }: Props) {
       <Pressable style={t.buttonGhost} onPress={testRetention}>
         <Text style={t.buttonGhostText}>Test 45-day retention</Text>
       </Pressable>
-      <Pressable style={t.buttonGhost} onPress={showScheduled}>
-        <Text style={t.buttonGhostText}>Show scheduled morning sync</Text>
+      <Pressable style={t.buttonGhost} onPress={refreshSyncStatus}>
+        <Text style={t.buttonGhostText}>Refresh morning-sync status</Text>
       </Pressable>
 
       {log.length > 0 && (
@@ -315,6 +342,16 @@ export function HarnessScreen({ commitment, commitmentId, onClose }: Props) {
       </Pressable>
     </ScrollView>
   );
+}
+
+/** Local date and time for a stored instant, or an em dash when there is none. */
+function stamp(ms: number | null): string {
+  if (ms === null) return '—';
+  const d = new Date(ms);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(
+    d.getHours(),
+  )}:${pad(d.getMinutes())}`;
 }
 
 /** Local `HH:MM → HH:MM` for a set of instants. Stays on the device (D-010). */

@@ -14,8 +14,9 @@ Date: 2026-09-07
 > in the engine: Health Connect only holds ~6 nights of Garmin history on this device. That has
 > a consequence worth acting on, in §9.
 >
-> AC-2.7 is running overnight. AC-2.3 and AC-2.6 remain half-met — proven by test, device check
-> outstanding. Two real bugs were found and fixed on the way, both in code T-001 shipped as
+> AC-2.7 is **met with a caveat**: the notification fired 5 minutes late under Samsung's
+> battery optimisation, which is expected behaviour rather than a bug. AC-2.3 and AC-2.6 remain
+> half-met — proven by test, device check outstanding. Two real bugs were found and fixed on the way, both in code T-001 shipped as
 > green, and §12 adds the approved guard that would have caught them.
 
 ---
@@ -72,6 +73,9 @@ tests/no-network.test.ts             AC-2.6, static half
 app/src/platform/androidPermissions.ts  the permission contract (§12)
 tests/manifest-permissions.test.ts   permission guard, layer 1 (§12)
 app/scripts/check-manifest.mjs       permission guard, layer 2 (§12)
+app/src/engine/morningSyncTime.ts    pure trigger arithmetic + self-diagnosis
+app/src/storage/kv.ts                operational bookkeeping (migration 3)
+tests/morning-sync.test.ts           trigger timing and verdict logic
 reports/R-002-local-engine.md        this file
 ```
 
@@ -101,7 +105,7 @@ tasks/T-001-foundation.md    DONE (approved by checker)
 
 | Gate | Command | Result |
 |---|---|---|
-| Unit + fixtures | `npm test` | **105 passed, 2 skipped**, 9 files |
+| Unit + fixtures | `npm test` | **116 passed, 2 skipped**, 10 files |
 | Typecheck | `npm run typecheck` | **clean** |
 | Lint | `npm run lint` | **clean**, 0 errors 0 warnings |
 | Native config | `npm run check:manifest` | **passed**; all 6 required permissions present, no write permission (see §12) |
@@ -127,7 +131,7 @@ is tested, but T-002 contains no path that reaches it.
 
 ## 4. Tests passed / failed
 
-**Passed: 105. Failed: 0. Skipped: 2**, both Layer 2 manifest assertions that require a
+**Passed: 116. Failed: 0. Skipped: 2**, both Layer 2 manifest assertions that require a
 generated manifest; `npm run check:manifest` covers them and passes. Nothing is `.only`'d or
 marked todo.
 
@@ -261,7 +265,7 @@ passing fixture.
 | **AC-2.4** D-020 SQLite write path executes | **MET** — *Force D-017 fallback* → *Read again* gave `RHR nights available 1, RHR from fallback yes`. First execution of that code path anywhere. |
 | **AC-2.5** 45-day retention | **MET** — `31 → seeded 32 (2026-07-09) → purged 1 → 31`. |
 | **AC-2.6** no network in a full session | **half met** — static scan clean; runtime intercept not performed. |
-| **AC-2.7** preview APK, laptop off, morning notification | **PENDING** — running overnight. `Morning sync scheduled: 1` confirms exactly one trigger is armed, within spec §10's 2/day cap. |
+| **AC-2.7** preview APK, laptop off, morning notification | **MET, with a caveat** — fired 2026-09-08 at **08:05** for an 08:00 schedule, laptop off, battery setting *Optimised*. The 5-minute delay is platform behaviour, not a defect; see below. |
 | **AC-2.8** timezone mid-history | **described** (§8), with a real gap named. |
 
 ### AC-2.2 — the honest number, and what it means
@@ -307,6 +311,47 @@ directly observed is the shorter session's end time**, since the harness prints 
 selected session's span. That is a one-line harness addition if the checker wants it closed
 properly rather than inferred.
 
+### AC-2.7 — the notification, and why 5 minutes late is the right answer
+
+**Fired at 08:05 for an 08:00 trigger**, on the S26 Ultra, laptop off, with the app's battery
+setting on *Optimised* — the restrictive default, not the permissive one. That is a pass.
+
+**The delay is platform behaviour.** Samsung batches inexact alarms so the radio and CPU wake
+once rather than many times; a 0–15 minute spread is normal, and it grows with how long the app
+has been idle. Nothing in the app caused it and nothing in the app can remove it.
+
+**Exact alarms were considered and rejected.** `SCHEDULE_EXACT_ALARM` / `USE_EXACT_ALARM` would
+tighten the timing, at the cost of an extra permission, a Play policy question about whether a
+sleep app qualifies as an alarm-clock app, and a per-OEM fight that never really ends. Two
+findings make it a bad trade:
+
+- `expo-notifications` **does not expose an exact or alarm-clock trigger** at all. Its
+  schedulable types are `DAILY`, `WEEKLY`, `MONTHLY`, `YEARLY`, `DATE` and `TIME_INTERVAL`.
+  Getting exact timing would mean dropping to native code or replacing the library.
+- More importantly, it buys nothing. Derivation runs whenever the app is foregrounded, so a
+  late or entirely absent notification costs convenience, not correctness. The night is still
+  worked out the moment the app is opened, at any hour.
+
+So the notification is a nudge, not a mechanism. The history screen now says so in plain words,
+rather than leaving a user to wonder whether a missing reminder means missing data.
+
+**What was fixed while investigating**, none of it about timing:
+
+- **The schedule is now re-armed on every app open.** It had been set only when a commitment was
+  saved. A force-stop or cleared app data would have removed it with nothing to put it back —
+  a real latent bug, unrelated to this run, that would have shown up as a reminder that silently
+  stopped forever.
+- **Fires are now recorded.** `app_kv` (SQLite migration 3) stores when the trigger was last
+  scheduled, when it is next expected, and when it last actually fired.
+- **Diagnostics show `next scheduled sync · last fired`**, plus how many triggers the OS says
+  are armed and a verdict of NEVER_SCHEDULED / PENDING / FIRED / MISSED. This is the part that
+  matters beyond this phone: OEM battery handling varies enough that "it worked on mine" is not
+  evidence about anyone else's, and D-022 brand verification will need this on every device.
+
+`judgeMorningSync` is deliberately conservative — it tolerates a long delay before calling a
+morning missed, and it will never report FIRED from a stale fire recorded before the last due
+time. Six unit tests cover it, including the exact 08:00-due / 08:05-fired case observed here.
+
 ---
 
 ## 10. Risks
@@ -336,8 +381,7 @@ properly rather than inferred.
 
 1. ~~Run the preview APK and close §9.~~ Done — §9 carries the numbers. Three criteria met on
    device, one missed with the real figure recorded, one pending overnight, two half-met.
-2. **Confirm AC-2.7 in the morning** — whether the notification fired with the laptop off.
-   That is the last device fact T-002 is waiting on.
+2. ~~Confirm AC-2.7 in the morning.~~ Done — fired at 08:05, met with the caveat above.
 3. **Run `npm run check:manifest`** whenever app.json, a config plugin or a native dependency
    changes, and before any build. It is deliberately outside `npm test` because it prebuilds.
 4. **Consider a device check for AC-2.3 and AC-2.6**, the two that remain half-met. AC-2.3

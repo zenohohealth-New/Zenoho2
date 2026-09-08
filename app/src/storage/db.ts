@@ -52,6 +52,15 @@ const MIGRATIONS: readonly string[] = [
    );
    CREATE INDEX IF NOT EXISTS idx_daily_states_night
      ON daily_states (night_date DESC);`,
+
+  // 3 — operational bookkeeping. Chiefly the morning trigger: when it was last
+  // scheduled, when it is next expected, and when it last actually fired. Without
+  // this, a silent morning cannot be told apart from one where nothing was ever
+  // scheduled — the ambiguity that made AC-2.7's failure hard to diagnose.
+  `CREATE TABLE IF NOT EXISTS app_kv (
+     key   TEXT PRIMARY KEY NOT NULL,
+     value TEXT NOT NULL
+   );`,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

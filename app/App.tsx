@@ -27,7 +27,9 @@ import {
   deriveAndStoreNight,
   summariseHistory,
 } from './src/engine/nightlyEngine';
+import * as Notifications from 'expo-notifications';
 import {
+  recordMorningSyncFired,
   requestNotificationPermission,
   scheduleMorningSync,
 } from './src/engine/morningSync';
@@ -133,6 +135,13 @@ export default function App() {
         setCommitment(existing);
         setRoute('history');
         await refreshSummary(existing.id);
+
+        // Re-arm on every open: a schedule can be lost to a force-stop or to
+        // cleared app data, and nothing else would ever put it back.
+        void Notifications.getPermissionsAsync().then((p) => {
+          if (p.granted) void scheduleMorningSync(existing.wakeTargetMin);
+        });
+
         await sync(existing);
       } catch (e) {
         if (cancelled) return;
@@ -144,6 +153,21 @@ export default function App() {
       cancelled = true;
     };
   }, [refreshSummary, sync]);
+
+  // Record when the trigger actually fires. Both listeners matter: `received`
+  // covers a foreground delivery, `response` covers the user tapping it.
+  useEffect(() => {
+    const received = Notifications.addNotificationReceivedListener(() => {
+      void recordMorningSyncFired();
+    });
+    const responded = Notifications.addNotificationResponseReceivedListener(() => {
+      void recordMorningSyncFired();
+    });
+    return () => {
+      received.remove();
+      responded.remove();
+    };
+  }, []);
 
   const handleSave = useCallback(
     async (c: Commitment) => {

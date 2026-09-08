@@ -263,6 +263,11 @@ Status: DECIDED
 - `READ_RESTING_HEART_RATE` is a separate permission from heart rate ("Vitals" in the consent
   sheet grants HR, not RHR).
 - Real night observed: sleep 23:46 → 08:00, 963 HR samples, wear ratio 100%.
+- Morning notification fired 2026-09-08 at 08:05 for an 08:00 daily trigger, laptop off, app
+  battery setting "Optimised". Samsung batches inexact alarms; a 0–15 min delay is expected
+  platform behaviour, not a defect. Exact alarms deliberately NOT adopted: `expo-notifications`
+  exposes no exact/alarm-clock trigger, and the delay costs nothing because derivation runs on
+  app foreground regardless.
 
 ### Integration failure pattern (three failures, one day)
 All three were invisible to a green suite, a clean typecheck and a successful prebuild:

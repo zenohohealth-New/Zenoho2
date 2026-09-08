@@ -125,6 +125,11 @@ export function HistoryScreen(p: Props) {
         Your sleep and heart-rate readings stay on this phone. Zenoho has no account
         and sends nothing anywhere.
       </Text>
+      <Text style={t.footnote}>
+        The morning reminder can arrive late, or not at all, depending on how your
+        phone manages battery. It does not matter: opening Zenoho any time in the day
+        works out the night just the same.
+      </Text>
     </ScrollView>
   );
 }
