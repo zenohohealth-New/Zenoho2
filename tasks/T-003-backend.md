@@ -1,6 +1,11 @@
 # T-003 · Backend: identity, sync of derived states, privacy enforcement
 
-Status: READY · Owner: Claude Code (maker) · Reviewer: Claude Web (checker)
+Status: IN_REVIEW · Owner: Claude Code (maker) · Reviewer: Claude Web (checker)
+Report: reports/R-003-backend.md (2026-09-08). Code-complete and evidence-empty: migrations,
+RLS, edge function, auth, sync and screens are written; 127 tests, typecheck, lint and
+check:manifest clean. NONE of AC-3.1..AC-3.9 is verified — all need a live connection and the
+publishable key in app/.env is still the unfilled placeholder. AC-3.4 is half met (test only).
+Only the checker marks this DONE.
 Spec: spec/ZENOHO2-V1-SPEC.md §7, §8, §11 (Settings only), §13 AC-3, AC-7, AC-9, §14
 Decisions: D-007, D-010, D-011, D-020, D-023, D-025, D-027, D-030
 Prereq (founder): a Supabase project exists and its URL + anon key are in `app/.env` (never in chat, never committed).
