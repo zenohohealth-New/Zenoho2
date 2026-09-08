@@ -84,3 +84,6 @@ HANDOFF-*.md
 backend/supabase/migrations/
 backend/supabase/functions/
 backend/supabase/.temp/
+
+# vitest json reporter output (accidentally committed once in dc8e473)
+.vitest/
