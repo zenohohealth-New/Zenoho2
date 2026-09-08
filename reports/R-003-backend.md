@@ -1,6 +1,10 @@
 # R-003 · Backend: identity, sync of derived states, privacy enforcement
 
 Task: tasks/T-003-backend.md · Maker: Claude Code · Status set to IN_REVIEW
+> **Superseded 2026-09-08.** The checker REOPENED T-003 (D-040) after the device run at
+> ~16:00 IST. This report was written at 15:11 and is stale from §9 onward — it says no
+> run had succeeded and all tables were empty, both true then and false by 16:00. Read
+> `reports/CC-HANDOFF-2026-09-08.md` for the current state.
 Spec sections read: §7, §8, §11, §13, §14 · Decisions: D-007, D-010, D-011, D-020, D-023,
 D-025, D-027, D-030, and D-031/D-032/D-034 recorded here
 Date: 2026-09-08

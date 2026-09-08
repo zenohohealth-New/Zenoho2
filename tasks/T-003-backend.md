@@ -1,12 +1,23 @@
 # T-003 · Backend: identity, sync of derived states, privacy enforcement
 
-Status: IN_REVIEW · Owner: Claude Code (maker) · Reviewer: Claude Web (checker)
-Report: reports/R-003-backend.md (2026-09-08). Backend applied and verified on Zenoho2-new:
-schema matches spec 7 + D-034, RLS 8/8 against the live database, delete-account deployed with
-its secrets. AC-3.3 and AC-3.9 MET; AC-3.2, AC-3.4, AC-3.8 PARTIAL; AC-3.1, AC-3.5, AC-3.6,
-AC-3.7 NOT VERIFIED. All four application tables hold zero rows - the app has never
-successfully written to the server. Device run withheld under D-038 pending the auth email
-templates and, ideally, custom SMTP (D-039). Only the checker marks this DONE.
+Status: **REOPENED** by the checker 2026-09-08 (not IN_REVIEW; see D-040)
+Owner: Claude Code (maker) · Reviewer: Claude Web (checker)
+Report: reports/R-003-backend.md · Handoff: reports/CC-HANDOFF-2026-09-08.md
+
+Device run 2026-09-08 ~16:00 IST on APK e1a3bdd4, S26 Ultra / Android 16:
+AC-3.1 PASS, AC-3.2 PASS, AC-3.7 PASS, AC-3.8 PASS. AC-3.3 and AC-3.9 MET by the SQL suite.
+AC-3.4 met in tests; its live half is AC-3.5.
+
+Open:
+- **AC-3.5 NOT VERIFIED** - no live session intercepted.
+- **AC-3.6 FAIL (DEF-003-01)** - offline, tapping "Check last night" produces zero visual
+  change: no loading state, no error, no verdict. Undiagnosed.
+
+Deliverable 4 is **PARTIAL**: the local queue is implemented, "retry on next foreground" is
+NOT IMPLEMENTED - there is no AppState listener anywhere in the app, and drainQueue() is called
+from one place inside the "Check last night" handler. AC-3.6 could not have passed as written
+regardless of DEF-003-01. Per D-040 this reopens the task rather than counting as a review
+defect.
 
 ## Goal
 The app gets an identity and a server, and the server learns only what spec §7 allows. After this task a user can sign in, their derived nights sync up, they can export and delete everything, and a test proves that no raw sleep or heart-rate value can reach the server and that no user can read another user's rows. Pods, witnesses and reactions are NOT in this task (T-004).

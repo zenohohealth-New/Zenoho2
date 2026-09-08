@@ -438,6 +438,44 @@ not exist. Verifying the `zenoho.com` domain in Resend lifts this, and must happ
 invite goes out. Recorded in CLAUDE.md under External contracts and carried into T-004.
 Status: DECIDED — implemented, domain verification outstanding
 
+## D-040 · 2026-09-08 · A specified deliverable that was not implemented makes a task NOT_DONE, not IN_REVIEW
+No task reaches IN_REVIEW until the maker has manually exercised every screen and every control a
+user must physically touch, and reported what each one displayed. Automated test suites do not
+substitute for this.
+
+Context: T-003 deliverable 4 ("Offline-tolerant: queue locally, retry on next foreground") was
+specified and never implemented — no AppState listener exists. The task nonetheless reached
+IN_REVIEW with derive 35/35, netguard 15/15, eligibility 13/13, rls 8/8, lint, typecheck and an
+Android build all green. Every one of those gates tested logic sitting behind sign-in; none
+exercised a screen. The founder discovered the gap by tapping a button on a phone.
+
+Rule: before reporting a task complete, the maker states each numbered deliverable as
+IMPLEMENTED, PARTIAL or NOT IMPLEMENTED, and each screen/control touched with what it displayed.
+Checker reopens the task rather than treating an unimplemented deliverable as a review defect.
+Status: DECIDED
+
+## D-041 · 2026-09-08 · Never `git add -A`
+Stage files explicitly by path. List every staged path in the report.
+
+Context: a 48KB vitest output artifact was committed by accident in `dc8e473` via `git add -A`
+and had to be removed. The repository is public. The same mechanism is how a `.env`, a key or
+founder personal data eventually leaks. Explicit staging is the only defence that does not rely
+on remembering to check.
+
+### Related ruling, recorded here so it is not reopened
+The Supabase project ref `kjmaivclilrovfvqvjqr` appearing in `decisions/DECISIONS.md` and
+`reports/R-003-backend.md` in the public repo is **ACCEPTABLE and requires no action**. It is not
+a credential — it is embedded in the URL that every app install calls. Security rests on RLS
+(proven 8/8) and on the anon key being public by design (AC-3.9 proven). **Do not rewrite history
+over this.** The question was raised by the maker in the T-003 closing block and is now closed.
+Status: DECIDED
+
+## T-003 · REOPENED by the checker · 2026-09-08
+T-003 is **REOPENED**, not IN_REVIEW. Two acceptance criteria remain open:
+- **AC-3.5** — NOT VERIFIED. No live session has been intercepted.
+- **AC-3.6** — FAIL, DEF-003-01, and separately unimplementable as written until deliverable 4's
+  foreground drain exists.
+
 ---
 
 ## FINDINGS LOG — 2026-09-07 (evidence, not decisions)

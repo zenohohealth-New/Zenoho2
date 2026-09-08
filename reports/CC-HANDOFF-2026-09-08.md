@@ -170,6 +170,12 @@ missing loading state.
 | D-037 | Public config lives in EAS environment variables | DECIDED |
 | D-038 | Prove it before asking the founder to touch the phone | DECIDED — confirmed as drafted |
 | D-039 | Custom SMTP for auth email | DECIDED — implemented, domain verification outstanding |
+| D-040 | An unimplemented deliverable makes a task NOT_DONE, not IN_REVIEW; manually exercise every screen before reporting | DECIDED — checker, 2026-09-08 |
+| D-041 | Never `git add -A`; stage explicitly by path and list every path in the report | DECIDED — checker, 2026-09-08 |
+
+**T-003 is REOPENED**, not IN_REVIEW (D-040). AC-3.5 and AC-3.6 remain open. The checker also
+ruled that the project ref in the public repo is acceptable and needs no action — §8 item 7 below
+is answered and closed; do not rewrite history over it.
 
 **No duplicate D-036 was created.** `decisions/DECISIONS.md` contains exactly one `## D-036`
 heading. The placeholder that previously read "(text not supplied)" was replaced in place by the
@@ -240,12 +246,10 @@ is not configured", the failure that produced D-037), `9f5be4d2` (config loaded,
 6. **`npx expo lint` exits 0 without linting anything.** The real gate is `npm run lint`
    (`eslint .`). An earlier report of mine claimed "lint clean" on the strength of the former;
    that was a false gate and is corrected in R-002 §11.
-7. **The project ref `kjmaivclilrovfvqvjqr` appears in `decisions/DECISIONS.md` and
-   `reports/R-003-backend.md`, in a public repo.** T-003's constraints say "nothing in migrations
-   or code may contain project ref, keys, or the founder's data". Docs are neither migrations nor
-   code, and the ref is not secret — it is in the URL inlined into every APK — but this is close
-   enough to the letter of the constraint that the checker should rule on it rather than have me
-   decide unilaterally.
+7. ~~The project ref appears in a public repo.~~ **RULED ACCEPTABLE by the checker,
+   2026-09-08**, recorded under D-041. It is not a credential; it is in the URL every install
+   calls. Security rests on RLS (8/8) and on the anon key being public by design (AC-3.9). No
+   action, and **do not rewrite history over it**.
 8. **No health claim appears in any string**, and the D-027 "what leaves this phone" paragraph is
    on both the sign-in and settings screens. Keep it that way when editing copy.
 9. **Local SQLite is the source of truth for display.** The server is a mirror. A failed sync
