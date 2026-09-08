@@ -8,7 +8,7 @@
  * Copy rule (spec §11) applies to every string reachable from here.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Share, Text, View } from 'react-native';
+import { ActivityIndicator, AppState, Share, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 
 import { localDateKey } from './src/derive';
@@ -37,7 +37,6 @@ import { getSupabase, readBackendEnv } from './src/backend/client';
 import {
   deleteAccount,
   drainQueue,
-  ensureRemoteCommitment,
   exportOwnRows,
   queueNight,
 } from './src/backend/sync';
@@ -82,6 +81,15 @@ export default function App() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [email, setEmail] = useState<string | null>(null);
+  /**
+   * The result of the last "Check last night" tap, shown next to the button.
+   *
+   * DEF-003-01: offline, a tap appeared to do nothing. Every other piece of
+   * feedback on this screen — the verdict, the error banner — renders at the top
+   * of a scroll view that is thirty rows tall, so from the button they are all
+   * off-screen. Feedback about a control has to live next to that control.
+   */
+  const [checkNote, setCheckNote] = useState<string | null>(null);
   const [pendingSync, setPendingSync] = useState(0);
   const [clockOffsetMin, setClockOffsetMin] = useState<number | null>(null);
 
@@ -99,16 +107,42 @@ export default function App() {
    * Derive last night, backfilling first when the store is empty. Read failures
    * are shown, never swallowed into a NO_DATA — a failed read is not a missed night.
    */
+  /**
+   * Push whatever is queued. Best-effort and silent about ordinary failure:
+   * offline is a normal state, not an error worth a banner.
+   */
+  const pushPending = useCallback(async (c: StoredCommitment | null) => {
+    const r = await drainQueue(c ?? undefined);
+    setPendingSync(await pendingCount());
+    setClockOffsetMin(await kvGetNumber(KEY_CLOCK_OFFSET_MIN));
+    return r;
+  }, []);
+
+  /**
+   * Derive last night, backfilling first when the store is empty.
+   *
+   * Local-first, and that ordering is the point (D-010). Health Connect is on the
+   * phone, the promise is in SQLite, the verdict is computed here — so a verdict
+   * is produced, stored and displayed with no network at all. Upload is a separate
+   * step afterwards that can fail freely without touching any of it.
+   *
+   * Read failures are shown, never swallowed into a NO_DATA — a failed read is not
+   * a missed night. And every path through this function sets `checkNote`, so a
+   * tap always changes something the user can see next to the button.
+   */
   const sync = useCallback(
     async (c: StoredCommitment) => {
       setBusy(true);
       setError(null);
+      setCheckNote(null);
+      let note = 'Finished.';
       try {
         const store = getHealthStore();
         if ((await store.requestReadPermissions()) !== 'GRANTED') {
           setError(
             'Zenoho needs permission to read sleep and heart rate from Health Connect.',
           );
+          note = 'Health Connect permission is not granted — nothing was read.';
           return;
         }
 
@@ -130,39 +164,41 @@ export default function App() {
           ...base,
           nightDate: localDateKey(nowMs, tzOffsetMin),
         });
+
         if (outcome === null) {
           setError("Couldn't read sleep from Health Connect, so nothing was recorded.");
+          note = "Couldn't read sleep — nothing was recorded for last night.";
         } else if (outcome.readErrors.length > 0) {
           setError(outcome.readErrors.map((e) => `${e.kind}: ${e.message}`).join('\n'));
+          note = 'Read partly failed — see the note at the top of this screen.';
+        } else {
+          note = `Last night: ${outcome.stored.state}.`;
         }
 
         await refreshSummary(c.id);
 
-        // Sync is best-effort and never blocks the local result: the server is a
-        // mirror, local stays the source of truth for display (T-003 deliverable 4).
-        if (backendConfigured() && outcome !== null) {
-          try {
-            const { data } = await getSupabase().auth.getUser();
-            if (data.user) {
-              const remoteId = await ensureRemoteCommitment(c);
-              await queueNight(outcome.stored, remoteId);
-              await drainQueue();
-            }
-          } catch {
-            // Offline, signed out, or refused: the night stays queued for the
-            // next foreground (AC-3.6). Not surfaced as an error, because the
-            // night itself was derived and stored perfectly well.
+        // Queue unconditionally, before anything that could need a network. This
+        // is the DEF-003-01 fix: queueing used to sit behind `auth.getUser()`,
+        // a round trip, so a night derived offline was never queued at all.
+        if (outcome !== null && backendConfigured()) {
+          await queueNight(outcome.stored);
+          const r = await pushPending(c);
+          if (r.remaining > 0) {
+            note += ` Saved on this phone; ${r.remaining} night${
+              r.remaining === 1 ? '' : 's'
+            } waiting to upload.`;
           }
-          setPendingSync(await pendingCount());
-          setClockOffsetMin(await kvGetNumber(KEY_CLOCK_OFFSET_MIN));
         }
       } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
+        const message = e instanceof Error ? e.message : String(e);
+        setError(message);
+        note = `Something went wrong: ${message}`;
       } finally {
+        setCheckNote(note);
         setBusy(false);
       }
     },
-    [tzOffsetMin, refreshSummary],
+    [tzOffsetMin, refreshSummary, pushPending],
   );
 
   // Boot: recover the session, load the commitment, and route.
@@ -181,10 +217,12 @@ export default function App() {
         // Recover a persisted session so Settings knows who is signed in, and so
         // a returning user is not asked again (AC-3.1).
         let session = null;
+        let sessionKnown = false;
         if (backendConfigured()) {
           try {
             const { data } = await getSupabase().auth.getSession();
             session = data.session;
+            sessionKnown = true;
             if (session?.user.email) setEmail(session.user.email);
           } catch {
             // Backend unreachable or misconfigured: the app is still fully usable
@@ -192,7 +230,11 @@ export default function App() {
           }
         }
 
-        if (backendConfigured() && session === null) {
+        // Only route to sign-in when we positively know there is no session.
+        // Offline, `getSession` can fail to confirm one, and treating "couldn't
+        // check" as "signed out" would throw a signed-in user back to sign-in
+        // every time they opened the app without a network.
+        if (backendConfigured() && sessionKnown && session === null) {
           setRoute('signin');
           return;
         }
@@ -221,6 +263,22 @@ export default function App() {
       cancelled = true;
     };
   }, [refreshSummary, sync]);
+
+  /**
+   * Drain the queue whenever the app comes to the foreground (AC-R3, deliverable 4).
+   *
+   * This is the only lifecycle handling in the app and deliberately the smallest
+   * thing that satisfies the requirement: one `AppState` listener, no navigation
+   * library, no background task, no scheduler. A night derived in airplane mode
+   * uploads the next time the app is opened with a network, without a tap.
+   */
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next) => {
+      if (next !== 'active') return;
+      void pushPending(commitment);
+    });
+    return () => sub.remove();
+  }, [pushPending, commitment]);
 
   // Record when the trigger actually fires. Both listeners matter: `received`
   // covers a foreground delivery, `response` covers the user tapping it.
@@ -400,6 +458,8 @@ export default function App() {
         promptDeviceCheck={promptDeviceCheck}
         busy={busy}
         error={error}
+        checkNote={checkNote}
+        pendingSync={pendingSync}
         onRefresh={() => void sync(commitment)}
         onEditCommitment={() => setRoute('commitment')}
         onOpenHarness={() => setRoute('harness')}

@@ -8,7 +8,7 @@
 import type { DerivedNight } from '../derive/types';
 import type { StoredCommitment } from '../storage/commitmentStore';
 import { KEY_REMOTE_COMMITMENT_ID, kvGetNumber, kvSetNumber } from '../storage/kv';
-import { toServerRow } from '../net/payload';
+import { toServerRow, type ServerDailyStateRow } from '../net/payload';
 import { getSupabase } from './client';
 import { getDeviceClockOffsetMin } from './clockSkew';
 import { clearQueue, enqueue, markFailed, markSent, pending, pendingCount } from './syncQueue';
@@ -60,15 +60,30 @@ export async function ensureRemoteCommitment(
 }
 
 /**
- * Queue a derived night for upload. Always queues, never sends directly: one code
- * path to the server means one place where offline behaviour lives (AC-3.6).
+ * The commitment id a night carries while it is still only local.
+ *
+ * A night derived in a basement has no server commitment id, because obtaining
+ * one is a round trip. The real id is stamped at drain time, when there is a
+ * network to stamp it from. Zero is never a real id — Postgres identities start
+ * at one — so a row that still carries it has provably never been uploaded.
  */
-export async function queueNight(
-  night: DerivedNight,
-  remoteCommitmentId: number,
-): Promise<void> {
-  const offset = await getDeviceClockOffsetMin(serverNow);
-  await enqueue(toServerRow(night, remoteCommitmentId, offset));
+export const UNSTAMPED_COMMITMENT_ID = 0;
+
+/**
+ * Queue a derived night for upload. **Local only: this touches no network.**
+ *
+ * DEF-003-01 / AC-3.6: this used to be called from inside `if (data.user)`, and
+ * `auth.getUser()` is a round trip to `/auth/v1/user`. Offline that call rejects,
+ * the caller's catch swallowed it, and the night was never queued at all — so
+ * "queue locally, retry on next foreground" could not work, because nothing was
+ * ever queued. Queueing is now unconditional and synchronous with derivation.
+ *
+ * `commitment_id` and `device_clock_offset_min` are both stamped at drain: the
+ * first needs the server, the second needs a clock probe. Neither is part of the
+ * verdict, so neither can change what was derived on device.
+ */
+export async function queueNight(night: DerivedNight): Promise<void> {
+  await enqueue(toServerRow(night, UNSTAMPED_COMMITMENT_ID, null));
 }
 
 export interface DrainResult {
@@ -80,27 +95,64 @@ export interface DrainResult {
 }
 
 /**
- * Push everything pending. Called on foreground and after each derivation.
+ * Push everything pending. Called on foreground (AC-R3) and after each
+ * derivation when online.
  *
  * Stops at the first failure rather than hammering a dead network: the queue is
  * ordered by night and the next foreground will try again. A row is only removed
- * once the server has acknowledged it.
+ * once the server has acknowledged it, so a drain interrupted halfway leaves the
+ * rest queued rather than lost.
+ *
+ * Idempotent (AC-R7). The upsert is on `(commitment_id, night_date)`, so
+ * re-draining a night the server already has updates that one row and inserts
+ * nothing. Draining an empty queue is a no-op that reports success.
+ *
+ * Never throws: offline is the expected case, not an exception. The caller gets
+ * a `stoppedBecause` string and decides whether it is worth showing.
  */
-export async function drainQueue(): Promise<DrainResult> {
+export async function drainQueue(
+  local?: StoredCommitment,
+): Promise<DrainResult> {
   const rows = await pending();
   if (rows.length === 0) {
     return { sent: 0, failed: 0, remaining: 0, stoppedBecause: null };
   }
 
-  const supabase = getSupabase();
-  const { data: auth } = await supabase.auth.getUser();
-  if (!auth.user) {
-    return {
-      sent: 0,
-      failed: 0,
-      remaining: rows.length,
-      stoppedBecause: 'not signed in',
-    };
+  const stop = (why: string): DrainResult => ({
+    sent: 0,
+    failed: 0,
+    remaining: rows.length,
+    stoppedBecause: why,
+  });
+
+  let supabase;
+  try {
+    supabase = getSupabase();
+  } catch {
+    return stop('backend not configured');
+  }
+
+  // getSession reads local storage; getUser is a round trip. Offline the round
+  // trip is exactly what we are avoiding, so ask the cheap question.
+  let session;
+  try {
+    const { data } = await supabase.auth.getSession();
+    session = data.session;
+  } catch (e) {
+    return stop(e instanceof Error ? e.message : 'could not read session');
+  }
+  if (!session) return stop('not signed in');
+
+  // The two fields the queue could not know on device. Both are stamped here,
+  // where a network exists; neither is part of the derived verdict.
+  let commitmentId: number;
+  let offset: number | null;
+  try {
+    if (local === undefined) return stop('no local commitment');
+    commitmentId = await ensureRemoteCommitment(local);
+    offset = await getDeviceClockOffsetMin(serverNow);
+  } catch (e) {
+    return stop(e instanceof Error ? e.message : 'could not reach the server');
   }
 
   let sent = 0;
@@ -108,9 +160,15 @@ export async function drainQueue(): Promise<DrainResult> {
   let stoppedBecause: string | null = null;
 
   for (const row of rows) {
+    const payload: ServerDailyStateRow = {
+      ...row.payload,
+      commitment_id: commitmentId,
+      device_clock_offset_min: offset,
+    };
+
     const { error } = await supabase
       .from('daily_states')
-      .upsert(row.payload, { onConflict: 'commitment_id,night_date' });
+      .upsert(payload, { onConflict: 'commitment_id,night_date' });
 
     if (error) {
       failed += 1;

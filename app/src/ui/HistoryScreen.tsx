@@ -26,6 +26,10 @@ interface Props {
   readonly promptDeviceCheck: boolean;
   readonly busy: boolean;
   readonly error: string | null;
+  /** What the last "Check last night" tap did. Rendered beside that button. */
+  readonly checkNote: string | null;
+  /** Nights derived but not yet uploaded. */
+  readonly pendingSync: number;
   readonly onRefresh: () => void;
   readonly onEditCommitment: () => void;
   /** Long-press the title to reach the T-001 harness (D-022). */
@@ -117,6 +121,21 @@ export function HistoryScreen(p: Props) {
       <Pressable style={[t.button, p.busy && { opacity: 0.6 }]} disabled={p.busy} onPress={p.onRefresh}>
         <Text style={t.buttonText}>{p.busy ? 'Reading…' : 'Check last night'}</Text>
       </Pressable>
+
+      {/*
+        DEF-003-01. Every other signal on this screen — the verdict, the error
+        banner — is at the top, thirty rows above the button that triggers it, so
+        from here a tap looked like it did nothing at all. Feedback about a
+        control belongs next to that control, and this line is never empty after
+        a tap: every path through the handler sets it, including the failures.
+      */}
+      {p.busy && <Text style={t.footnote}>Reading your watch…</Text>}
+      {!p.busy && p.checkNote !== null && <Text style={t.footnote}>{p.checkNote}</Text>}
+      {!p.busy && p.checkNote === null && p.pendingSync > 0 && (
+        <Text style={t.footnote}>
+          {p.pendingSync} night{p.pendingSync === 1 ? '' : 's'} saved here, waiting to upload.
+        </Text>
+      )}
 
       <Pressable style={t.buttonGhost} onPress={p.onEditCommitment} disabled={p.busy}>
         <Text style={t.buttonGhostText}>Change my promise</Text>
