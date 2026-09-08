@@ -284,12 +284,26 @@ sign-in in v1 (OAuth client setup is pure friction for 5–8 gym users). Display
 profile photo. Recorded by T-003.
 Status: DECIDED
 
-## D-033 · (no decision recorded)
-T-003 recorded D-031 and D-032, and the founder's ruling below was numbered D-034, leaving this
-id unused. Flagged rather than assumed deliberate: this is the third such gap, and the previous
-two — D-015 and D-021 — both turned out to be real decisions taken in chat and never written
-down. If D-033 was decided somewhere, record it here; otherwise retire the number.
-Status: OPEN (clerical)
+## D-033 · 2026-09-08 · Gated roadmap
+Gated roadmap — no stage beyond v1 is built until its gate is passed by real usage.
+
+**v1.1** (movement promise, visibility toggle, margin unlock, doubt mark, iOS, Play listing)
+requires ≥60% of the gym pod active at day 28, and witness-reacted users keeping more nights
+than non-reacted.
+
+**v1.2** (shared pod commitment, multi-pod, in-pod invites) requires two more pods completing a
+cycle and one organic recruit.
+
+**v2** (pod discovery, brand verification at scale, possible cheap-watch layer) requires pods
+forming without the founder.
+
+The roadmap is a hypothesis list, not a plan.
+
+Note: the v1.1 gate is the direct test of D-001's core untested assumption — that an
+app-mediated witness reproduces the human-witness effect. If witness-reacted users do not keep
+more nights than non-reacted, the thesis has failed its first real measurement, and building
+v1.1 would be building on a hypothesis that has just been disconfirmed.
+Status: DECIDED
 
 ## D-034 · 2026-09-08 · Clock skew is measured without sending a timestamp
 The server sets `daily_states.computed_at` itself (`timestamptz DEFAULT now()`). The client

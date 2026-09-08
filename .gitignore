@@ -76,3 +76,11 @@ Thumbs.db
 
 # --- Handoff files (D-029): local only, never committed to a public repo ---
 HANDOFF-*.md
+
+# --- Supabase CLI staging area ---
+# Canonical migrations and functions live in backend/migrations and
+# backend/functions (T-003). The CLI insists on its own supabase/ layout, so
+# those are copied there at deploy time; the copy is a build artifact.
+backend/supabase/migrations/
+backend/supabase/functions/
+backend/supabase/.temp/
