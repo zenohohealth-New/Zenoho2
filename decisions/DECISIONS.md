@@ -452,6 +452,20 @@ exercised a screen. The founder discovered the gap by tapping a button on a phon
 Rule: before reporting a task complete, the maker states each numbered deliverable as
 IMPLEMENTED, PARTIAL or NOT IMPLEMENTED, and each screen/control touched with what it displayed.
 Checker reopens the task rather than treating an unimplemented deliverable as a review defect.
+
+**Clarified 2026-09-08 by the checker, after the maker misread it.** The manual pass must be done
+by a HUMAN, not specifically by the maker. Claude Code has no JDK, Android SDK, emulator or
+device (D-013), so "the maker exercises every screen" is structurally unsatisfiable and reading
+it that way makes the rule impossible to satisfy — which is what happened in R-003-R, where the
+maker set the task NOT_DONE on those grounds.
+
+The division of labour:
+- **Maker**: states each numbered deliverable as IMPLEMENTED / PARTIAL / NOT IMPLEMENTED. This
+  is the part that was actually missing from T-003 and the reason D-040 exists.
+- **Founder**: performs the device pass.
+- **Status ladder**: a task whose code is complete but which has no device evidence is
+  **AWAITING_DEVICE_RUN**. It becomes IN_REVIEW only once device evidence exists. The checker
+  then marks DONE.
 Status: DECIDED
 
 ## D-041 · 2026-09-08 · Never `git add -A`

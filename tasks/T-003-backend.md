@@ -1,6 +1,7 @@
 # T-003 · Backend: identity, sync of derived states, privacy enforcement
 
-Status: **REOPENED** by the checker 2026-09-08 (not IN_REVIEW; see D-040)
+Status: **AWAITING_DEVICE_RUN** (T-003-R) — code complete, no device evidence yet (D-040)
+Report: reports/R-003-R.md. Becomes IN_REVIEW once AC-R1..R8 have device evidence.
 Owner: Claude Code (maker) · Reviewer: Claude Web (checker)
 Report: reports/R-003-backend.md · Handoff: reports/CC-HANDOFF-2026-09-08.md
 
