@@ -22,6 +22,20 @@ You are the MAKER for Zenoho2. Claude Web is the CHECKER. The founder is the app
 - Report in reports/R-xxx.md using the README format. Name physical devices used.
 - Do not mark a task DONE; set IN_REVIEW. The checker marks DONE.
 
+## External contracts (things outside the repo that can break it)
+- **D-038**: prove it before asking the founder to touch the phone. Verify against the live
+  system first; a device run confirms, it does not discover.
+- **Supabase free project pauses after 7 idle days.** A paused project fails every request, and
+  the app will look broken rather than paused. Relevant to T-004 and to any gap between beta
+  waves.
+- **FCM credentials in EAS for push.** Android push needs a Firebase service-account key
+  uploaded to EAS credentials. Not needed while notifications are local (spec §10 morning sync),
+  required the moment a witness alert becomes a real push in T-004/T-005.
+- **Auth email is rate-limited** (D-039): 2/hour on the built-in sender until custom SMTP is
+  configured.
+- **EAS builds do not receive `app/.env`** (D-037): public config lives in EAS environment
+  variables per profile, enforced by `npm run check:env` at build time.
+
 ## Current task
 tasks/T-001-foundation.md
 

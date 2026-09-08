@@ -1,7 +1,7 @@
 /**
  * Sign in with an email one-time code (D-032, T-003 deliverable 3).
  *
- * Two steps: email, then the 6-digit code. No password, no magic link, no OAuth.
+ * Two steps: email, then the numeric code. No password, no magic link, no OAuth.
  *
  * Copy rule (spec §11): no health claim, and D-027 — the copy has to be honest
  * that this is where data starts leaving the phone, because up to now none did.
@@ -19,6 +19,21 @@ interface Props {
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Supabase's email OTP length is a per-project setting, not a constant. This
+ * project issues 8 digits; the app previously hard-coded 6 and capped the input at
+ * 6 characters, so the correct code could not even be typed, let alone accepted.
+ *
+ * Accept the whole range Supabase supports and let the server decide. A client
+ * that is stricter than the server about a value the server owns is a bug waiting
+ * for a config change.
+ */
+const OTP_MIN = 6;
+const OTP_MAX = 10;
+// A literal, not a constructed one: `\d` inside a template literal loses its
+// backslash and silently becomes /^d{6,10}$/, which matches "dddddd".
+const OTP_RE = /^\d{6,10}$/;
 
 export function SignInScreen({ onSendCode, onVerify, onSkip }: Props) {
   const [step, setStep] = useState<Step>('email');
@@ -45,8 +60,8 @@ export function SignInScreen({ onSendCode, onVerify, onSkip }: Props) {
   };
 
   const verify = async () => {
-    if (!/^\d{6}$/.test(code.trim())) {
-      setError('The code is six digits.');
+    if (!OTP_RE.test(code.trim())) {
+      setError(`The code is ${OTP_MIN}–${OTP_MAX} digits — copy it exactly as sent.`);
       return;
     }
     setBusy(true);
@@ -68,7 +83,7 @@ export function SignInScreen({ onSendCode, onVerify, onSkip }: Props) {
         <>
           <Text style={t.sub}>
             Your email is used to sign in and to keep your nights on your own account.
-            No password to remember — we send a six-digit code.
+            No password to remember — we email you a short numeric code.
           </Text>
 
           <Text style={t.h2}>Email</Text>
@@ -101,18 +116,18 @@ export function SignInScreen({ onSendCode, onVerify, onSkip }: Props) {
       ) : (
         <>
           <Text style={t.sub}>
-            We sent a six-digit code to {email}. It can take a minute, and it
-            sometimes lands in spam.
+            We sent a code to {email}. It can take a minute, and it sometimes lands
+            in spam. Type it exactly as sent.
           </Text>
 
           <Text style={t.h2}>Code</Text>
           <TextInput
             value={code}
             onChangeText={setCode}
-            placeholder="123456"
+            placeholder="code"
             placeholderTextColor={colors.inkMuted}
             keyboardType="number-pad"
-            maxLength={6}
+            maxLength={OTP_MAX}
             textContentType="oneTimeCode"
             style={[t.card, { fontSize: 24, letterSpacing: 6, color: colors.ink }]}
           />

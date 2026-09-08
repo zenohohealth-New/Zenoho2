@@ -327,7 +327,10 @@ export default function App() {
     );
   }
 
-  if (route === 'settings' && commitment !== null) {
+  // Settings is about the account, not the promise, so it must not require a
+  // commitment. Gating it on one left a signed-out user with no commitment
+  // falling through to an endless spinner (found in the D-038 cold-install pass).
+  if (route === 'settings') {
     return (
       <View style={t.screen}>
         <StatusBar style="auto" />

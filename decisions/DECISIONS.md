@@ -361,13 +361,13 @@ Open: who owns `gsfjloiquddelmiaajtt`, and whether the Zenoho2 tables left in `d
 should eventually be removed by whoever does own it. Not Zenoho2's to decide (D-000).
 Status: DECIDED (amended)
 
-## D-036 · (no decision recorded)
-The founder's ruling below was numbered D-037, leaving this id unused. Flagged rather than
-assumed deliberate: this is the fourth such gap, and two of the previous three — D-015 and
-D-021 — turned out to be real decisions taken in chat and never written down. D-033 was the
-third and was later filled in. If D-036 was decided somewhere, record it here; otherwise retire
-the number.
-Status: OPEN (clerical)
+## D-036 · (text not supplied)
+The founder asked for D-036 and D-038 to be recorded "text in my previous message", but that
+message contained only D-037's wording. D-036's text has never been supplied in any message.
+D-038 has been drafted below from the founder's own numbered requirements and is marked as
+such; D-036 cannot be drafted, because nothing in the conversation indicates what it says.
+Supply the text, or retire the number.
+Status: OPEN — awaiting text
 
 ## D-037 · 2026-09-08 · Public config lives in EAS environment variables
 Public config (Supabase URL, publishable key) lives in EAS environment variables per build
@@ -390,6 +390,39 @@ in the cloud where the gap exists, and available locally as `npm run check:env`.
 missing value, an unfilled `<...>` template, a secret key, a legacy anon JWT, and a malformed
 project URL. All five modes were verified to fail before this was recorded.
 Status: DECIDED
+
+## D-038 · 2026-09-08 · Prove it before asking the founder to touch the phone
+DRAFTED BY THE MAKER from the founder's numbered requirements of 2026-09-08, because the
+verbatim text was not supplied. Confirm or replace the wording.
+
+No device steps are handed to the founder until the things those steps depend on have been
+verified by the maker against the live system — not assumed from code that compiles. Concretely,
+before a device run: external configuration is read from the service rather than inferred;
+credentials and secrets are confirmed present; every screen reachable from a fresh signed-out
+install is enumerated; and any budgeted resource (sign-in emails, for instance) has a stated
+budget the run fits inside.
+
+Why: three consecutive device runs were spent discovering things the maker could have found
+first — a missing manifest permission, a build with no backend config at all, and an OTP length
+the app could not accept. Each cost a round trip measured in hours, and the last would have
+burned a scarce resource for nothing. A device run is expensive and should be spent confirming
+that something works, not discovering that it cannot.
+Status: DECIDED (wording drafted, pending founder confirmation)
+
+## D-039 · 2026-09-08 · Custom SMTP for auth email
+The built-in Supabase email sender is limited to **2 emails per hour** on this project
+(`auth.rate_limit.email_sent = 2`, read from the live project config on 2026-09-08). The
+project config also notes that this limit is only adjustable once `auth.email.smtp` is enabled,
+so the built-in sender cannot be raised.
+
+Two per hour is below the threshold the founder set (10/hour) and is unworkable even for a
+single person testing sign-in, let alone a pod of 5–8 people onboarding on the same evening.
+Custom SMTP via Resend's free tier is therefore required before any invite goes out.
+
+Implementation pending: the Resend API key is a real secret and will be entered by the founder,
+never pasted into chat or committed. It is set as Supabase auth SMTP configuration, not as an
+app environment variable — the app never sends email.
+Status: DECIDED (implementation pending the API key)
 
 ---
 
