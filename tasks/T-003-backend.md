@@ -20,7 +20,7 @@ Email one-time code (Supabase email OTP). No phone OTP (needs a paid SMS provide
 ## Deliverables
 1. **Migrations** in `backend/migrations/` creating: `users`, `commitments`, `daily_states`, `push_tokens` per spec §8 (including `device_clock_offset_min`, and `computed_at` set server-side per D-034) — with the columns for pods/witness present but nullable (`pod_id`, `witness_user_id`) so T-004 adds tables, not column rewrites. `daily_states` server columns are exactly the §7 list: state, integrity, source_id, wear_presence, deviation_min, night_date, commitment_id, frozen, computed_at. Nothing else.
 2. **RLS policies** in the same migrations: users read/write own rows only; `daily_states` readable by owner only (witness view arrives in T-004); anon role has no table access.
-3. **Sign-in screen** — email → 6-digit code → in. Sign-out. Session persisted.
+3. **Sign-in screen** — email → code → in. Sign-out. Session persisted. (Length is not fixed: `otp_length` is a project setting and this project issues 8.)
 4. **Sync** — after every local derivation, upsert the derived row via `toServerRow` (the existing whitelist) to `daily_states`. Offline-tolerant: queue locally, retry on next foreground. Server is a mirror of local; local remains the source of truth for display in v1.
 5. **Network guard extended** — the runtime guard now allows exactly one host (the Supabase project URL) and still rejects any body containing forbidden keys / ISO instants / epoch ms. Test proves both.
 6. **Export** — Settings → "Export my data" produces a JSON of the user's own server rows, shared via the OS share sheet.

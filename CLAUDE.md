@@ -31,8 +31,10 @@ You are the MAKER for Zenoho2. Claude Web is the CHECKER. The founder is the app
 - **FCM credentials in EAS for push.** Android push needs a Firebase service-account key
   uploaded to EAS credentials. Not needed while notifications are local (spec §10 morning sync),
   required the moment a witness alert becomes a real push in T-004/T-005.
-- **Auth email is rate-limited** (D-039): 2/hour on the built-in sender until custom SMTP is
-  configured.
+- **Auth email reaches exactly one inbox** (D-039). Custom SMTP via Resend is enabled, so the
+  2/hour built-in limit is gone, but the sender is Resend's sandbox `onboarding@resend.dev` and
+  it delivers **only to zenohohealth@gmail.com**. Every other address silently receives nothing.
+  Verify `zenoho.com` in Resend before inviting anyone.
 - **EAS builds do not receive `app/.env`** (D-037): public config lives in EAS environment
   variables per profile, enforced by `npm run check:env` at build time.
 

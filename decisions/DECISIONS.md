@@ -361,13 +361,20 @@ Open: who owns `gsfjloiquddelmiaajtt`, and whether the Zenoho2 tables left in `d
 should eventually be removed by whoever does own it. Not Zenoho2's to decide (D-000).
 Status: DECIDED (amended)
 
-## D-036 · (text not supplied)
-The founder asked for D-036 and D-038 to be recorded "text in my previous message", but that
-message contained only D-037's wording. D-036's text has never been supplied in any message.
-D-038 has been drafted below from the founder's own numbered requirements and is marked as
-such; D-036 cannot be drafted, because nothing in the conversation indicates what it says.
-Supply the text, or retire the number.
-Status: OPEN — awaiting text
+## D-036 · 2026-09-08 · Print the identity before linking anything
+"Before linking any external account, org, or project, Claude Code prints which identity it is
+authenticated as and stops for founder confirmation."
+
+Maker's note on where this came from: during T-003 the CLI was authenticated, `projects list`
+returned several projects across more than one org, and I linked by ref without ever comparing
+that ref to the one already in `app/.env`. The project I linked was Zenoho1 material
+(`dwzqjyfcyxwdnuebtihz`, 135 rows in `marker_results`), out of scope under D-000 — see D-035.
+The check this decision mandates would have caught it in one line, before any migration ran.
+
+Scope: every `link`, `login`, remote add, credential upload or project selection — Supabase,
+EAS/Expo, GitHub, Play Console, Resend, or anything added later. Print the account and the org,
+then stop; do not proceed on a guess about which identity is active.
+Status: DECIDED
 
 ## D-037 · 2026-09-08 · Public config lives in EAS environment variables
 Public config (Supabase URL, publishable key) lives in EAS environment variables per build
@@ -392,8 +399,8 @@ project URL. All five modes were verified to fail before this was recorded.
 Status: DECIDED
 
 ## D-038 · 2026-09-08 · Prove it before asking the founder to touch the phone
-DRAFTED BY THE MAKER from the founder's numbered requirements of 2026-09-08, because the
-verbatim text was not supplied. Confirm or replace the wording.
+Drafted by the maker from the founder's numbered requirements of 2026-09-08 and **confirmed as
+drafted by the founder** the same day.
 
 No device steps are handed to the founder until the things those steps depend on have been
 verified by the maker against the live system — not assumed from code that compiles. Concretely,
@@ -407,7 +414,7 @@ first — a missing manifest permission, a build with no backend config at all, 
 the app could not accept. Each cost a round trip measured in hours, and the last would have
 burned a scarce resource for nothing. A device run is expensive and should be spent confirming
 that something works, not discovering that it cannot.
-Status: DECIDED (wording drafted, pending founder confirmation)
+Status: DECIDED
 
 ## D-039 · 2026-09-08 · Custom SMTP for auth email
 The built-in Supabase email sender is limited to **2 emails per hour** on this project
@@ -419,10 +426,17 @@ Two per hour is below the threshold the founder set (10/hour) and is unworkable 
 single person testing sign-in, let alone a pod of 5–8 people onboarding on the same evening.
 Custom SMTP via Resend's free tier is therefore required before any invite goes out.
 
-Implementation pending: the Resend API key is a real secret and will be entered by the founder,
-never pasted into chat or committed. It is set as Supabase auth SMTP configuration, not as an
-app environment variable — the app never sends email.
-Status: DECIDED (implementation pending the API key)
+**Done 2026-09-08.** The founder enabled custom SMTP through Resend and entered the API key
+directly in the Supabase dashboard; it was never pasted into chat and is not in the repo. It is
+Supabase auth SMTP configuration, not an app environment variable — the app never sends email.
+
+**Carries a live constraint.** The sender is Resend's shared sandbox address
+`onboarding@resend.dev`, which delivers **only to `zenohohealth@gmail.com`**. Mail to any other
+address is accepted by the API and never arrives. So sign-in works for the founder and for
+nobody else: the first pod member to try will see "code sent" and wait for an email that does
+not exist. Verifying the `zenoho.com` domain in Resend lifts this, and must happen before any
+invite goes out. Recorded in CLAUDE.md under External contracts and carried into T-004.
+Status: DECIDED — implemented, domain verification outstanding
 
 ---
 

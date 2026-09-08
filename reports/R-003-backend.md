@@ -15,7 +15,7 @@ Date: 2026-09-08
 > App-side, no acceptance criterion involving a round trip has been demonstrated. As of this
 > report the four application tables hold **zero rows**: nothing the app produced has ever
 > reached the server. Three device runs were consumed by defects rather than evidence, and the
-> fourth is deliberately withheld under D-038 until the auth email templates are confirmed.
+> fourth is deliberately withheld under D-038 until the auth email templates are in place.
 >
 > Status IN_REVIEW rather than IN_REVIEW-COMPLETE, and the gap is evidence, not code.
 
@@ -26,9 +26,10 @@ Date: 2026-09-08
 **Decisions.** D-031 (Supabase, ap-south-1 Mumbai) and D-032 (email OTP) recorded as the task
 specified. D-034 records the founder's ruling on clock skew. Later in the task: D-035 (legacy
 project found and left alone), D-037 (public config in EAS env vars), D-038 (prove it before a
-device run — wording drafted by me, the text was never supplied) and D-039 (custom SMTP).
-D-033 was a numbering gap and has since been filled in; **D-036 remains one**, with no text in
-any message, and is left open rather than invented.
+device run) and D-039 (custom SMTP). All four numbering gaps are now closed: D-033 and D-036
+were both real decisions that had gone unwritten, which is two out of four — worth remembering
+the next time a gap looks clerical. D-036 in particular is the rule that would have prevented
+D-035, and it was found only by counting the numbers.
 
 **Spec §8** gains `daily_states.device_clock_offset_min`, with a note that `computed_at` is
 server-set and never sent by the client.
@@ -165,16 +166,21 @@ the app makes** — none of that has executed once.
    because it needs project credentials a public repo cannot hold.
 3. ~~The migration has never been applied.~~ **CLOSED** — applied to Zenoho2-new and verified
    by querying the live database, not by re-reading the file.
-4. **Email OTP deliverability is unmeasured** (task open item). Rate limit now known: 2/hour
-   (D-039). Whether a code actually arrives, and in inbox or spam, is untested.
+4. **Email OTP deliverability is unmeasured** (task open item). The 2/hour built-in ceiling is
+   gone — custom SMTP through Resend is live (D-039) — but the sender is Resend's sandbox
+   `onboarding@resend.dev`, which delivers **only to zenohohealth@gmail.com**. Mail to anyone
+   else is accepted and dropped, with no error the app can see. Sign-in therefore works for the
+   founder and silently fails for every pod member until `zenoho.com` is verified in Resend.
+   That is a launch blocker, not a testing inconvenience. Whether the code actually lands, and
+   in inbox or spam, is still unmeasured even for the one address that works.
 5. **`frozen` server-side enforcement** (task open item, recommend-only): **recommended.** A
    trigger rejecting updates to a row already `frozen = true` is about ten lines, and without it
    the freeze rule is a client-side convention that any client build can ignore. Not implemented,
    per the task.
 6. **The `device_clock_offset_min` distribution** cannot be reported until nights sync — no
    night has synced.
-7. **D-036 has no text in any message**, and D-038's wording is my draft. Both flagged in the
-   decision log rather than invented.
+7. ~~D-036 has no text, D-038's wording is my draft.~~ **CLOSED** — the founder supplied D-036
+   and confirmed D-038 as drafted on 2026-09-08.
 
 ---
 
@@ -275,7 +281,8 @@ consumed the entire email budget without a single successful sign-in:
   yielding `/^d{6,10}$/` — which matches `"dddddd"` and no real code. Caught by executing the
   pattern rather than reading it. It is now a literal and a test asserts it stays one.
 - **`auth.rate_limit.email_sent = 2` per hour**, only adjustable once custom SMTP is enabled.
-  Recorded as D-039; custom SMTP is required before any invite goes out.
+  Recorded as D-039 and since resolved: the founder enabled Resend SMTP, which removes the
+  ceiling but introduces the single-recipient sandbox limit described in §10.
 - **`enable_confirmations = true`**, so a new user receives *Confirm signup*, not *Magic Link*.
   Fixing only one template would work for the founder and fail for every pod member.
 - **`site_url = http://localhost:3000`** — a dead address on a phone. Both templates in
@@ -283,6 +290,8 @@ consumed the entire email budget without a single successful sign-in:
 - **A cold-install dead-end**: Settings was gated on `commitment !== null`, so a signed-out user
   with no commitment fell through to an endless spinner.
 
-Remaining before a run is worth spending: paste both templates, confirm a numeric code arrives,
-and ideally configure Resend so the 2/hour ceiling stops mattering.
+Remaining before a run is worth spending: paste both templates and confirm a numeric code
+actually arrives. SMTP is no longer in the way — D-039 is done — and because Resend's sandbox
+sender delivers only to `zenohohealth@gmail.com`, the founder's own address is the one address
+that can be tested, which is exactly the address the run will use.
 
