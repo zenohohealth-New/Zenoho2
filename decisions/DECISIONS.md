@@ -337,7 +337,29 @@ prior attempt's data.
 Nothing in the legacy project was dropped, altered or exported. The migration Zenoho2 applied
 there remains, as do its four empty tables; removing them would itself be a modification, and
 the ruling was to leave the project alone.
-Status: DECIDED
+
+AMENDED 2026-09-08, and the amendment matters because the original wording was imprecise about
+*which* project. Observed facts, not inference:
+
+- The project Zenoho2 connected to and migrated is ref `dwzqjyfcyxwdnuebtihz`, named **Zenoho**,
+  in organisation `gsfjloiquddelmiaajtt`. This is the one holding the legacy schema
+  (marker_results 135 rows, panels, analysis_failures, domains, markers, systems, profiles) and
+  the four empty Zenoho2 tables the migration added.
+- A *separate* project named **zenoho1-legacy-DO-NOT-USE**, ref `dtbksalgbaicwatvoiyd`, exists in
+  organisation "zenohohealth-New's Org". Zenoho2 has never connected to it. Despite the name, it
+  is not the project described above.
+- The target project is **Zenoho2-new**, ref `kjmaivclilrovfvqvjqr`, also in
+  "zenohohealth-New's Org".
+
+So there are at least three projects across at least two accounts: the Supabase CLI is
+authenticated to an account that can see only `gsfjloiquddelmiaajtt`, while the browser session
+is in "zenohohealth-New's Org". That split is why `supabase link` to Zenoho2-new failed with
+insufficient privileges, and it is worth knowing before anyone assumes "the legacy project" is
+the one labelled DO-NOT-USE.
+
+Open: who owns `gsfjloiquddelmiaajtt`, and whether the Zenoho2 tables left in `dwzqjyfcyxwdnuebtihz`
+should eventually be removed by whoever does own it. Not Zenoho2's to decide (D-000).
+Status: DECIDED (amended)
 
 ---
 
