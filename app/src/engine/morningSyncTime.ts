@@ -37,18 +37,36 @@ export function nextDailyOccurrenceMs(
 export const MISSED_FIRE_GRACE_MIN = 120;
 
 export interface MorningSyncVerdict {
-  readonly state: 'NEVER_SCHEDULED' | 'PENDING' | 'FIRED' | 'MISSED';
+  readonly state:
+    | 'NEVER_SCHEDULED'
+    | 'NOT_YET_OBSERVED'
+    | 'PENDING'
+    | 'FIRED'
+    | 'MISSED';
   readonly detail: string;
 }
 
 /**
  * Decide, from stored bookkeeping alone, whether the last expected trigger fired.
- * Deliberately conservative: it never reports FIRED without a recorded fire.
+ *
+ * Conservative in both directions. It never reports FIRED without a recorded
+ * fire — and, just as importantly, it never reports MISSED for an occurrence the
+ * bookkeeping could not have seen.
+ *
+ * That second rule exists because of a real false alarm: the morning trigger fired
+ * at 08:05 on 2026-09-08, but `app_kv` (migration 3) was created later that day, so
+ * no record of the fire could exist. The screen accused the OS of dropping a
+ * notification that had actually arrived. A verdict that can be wrong in the
+ * alarming direction is worse than one that admits it does not know yet.
+ *
+ * `lastScheduledMs` is when the schedule was last recorded. If that is *after* the
+ * occurrence being judged, the fire happened before this device was keeping notes.
  */
 export function judgeMorningSync(
   nextAtMs: number | null,
   lastFiredMs: number | null,
   nowMs: number,
+  lastScheduledMs: number | null = null,
 ): MorningSyncVerdict {
   if (nextAtMs === null) {
     return { state: 'NEVER_SCHEDULED', detail: 'no trigger has been scheduled' };
@@ -62,6 +80,12 @@ export function judgeMorningSync(
   }
   if (nowMs < previousOccurrence + MISSED_FIRE_GRACE_MIN * 60_000) {
     return { state: 'PENDING', detail: 'not yet due, or inside the grace window' };
+  }
+  if (lastScheduledMs === null || lastScheduledMs > previousOccurrence) {
+    return {
+      state: 'NOT_YET_OBSERVED',
+      detail: 'scheduling was recorded after the last due time, so nothing could be observed',
+    };
   }
   return {
     state: 'MISSED',

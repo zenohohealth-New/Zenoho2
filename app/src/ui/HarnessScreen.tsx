@@ -300,6 +300,15 @@ export function HarnessScreen({ commitment, commitmentId, onClose }: Props) {
           </Text>
         </View>
       )}
+      {sync !== null && sync.verdict.state === 'NOT_YET_OBSERVED' && (
+        <View style={[t.notice, { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line }]}>
+          <Text style={t.noticeTitle}>Nothing to report yet</Text>
+          <Text style={t.noticeBody}>
+            This build started keeping records after the last reminder was due, so
+            there is nothing to judge. The first real verdict is tomorrow morning.
+          </Text>
+        </View>
+      )}
 
       <Text style={t.h2}>Acceptance tools</Text>
       <Pressable

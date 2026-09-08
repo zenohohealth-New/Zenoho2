@@ -165,18 +165,42 @@ export default function App() {
     [tzOffsetMin, refreshSummary],
   );
 
-  // Boot: load the commitment, then either ask for one or show the history.
+  // Boot: recover the session, load the commitment, and route.
+  //
+  // Spec §11 screen 1: a signed-out user lands on sign-in. Signing in is
+  // skippable — the app works entirely on-device without an account — but it must
+  // be offered rather than hidden, which is the defect this replaces.
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
         const existing = await loadCommitment();
         if (cancelled) return;
+        setCommitment(existing);
+
+        // Recover a persisted session so Settings knows who is signed in, and so
+        // a returning user is not asked again (AC-3.1).
+        let session = null;
+        if (backendConfigured()) {
+          try {
+            const { data } = await getSupabase().auth.getSession();
+            session = data.session;
+            if (session?.user.email) setEmail(session.user.email);
+          } catch {
+            // Backend unreachable or misconfigured: the app is still fully usable
+            // on-device, so this must not block boot.
+          }
+        }
+
+        if (backendConfigured() && session === null) {
+          setRoute('signin');
+          return;
+        }
         if (existing === null) {
           setRoute('commitment');
           return;
         }
-        setCommitment(existing);
+
         setRoute('history');
         await refreshSummary(existing.id);
 
@@ -269,6 +293,7 @@ export default function App() {
   const handleSignOut = useCallback(async () => {
     await getSupabase().auth.signOut();
     setEmail(null);
+    setPendingSync(0);
     setRoute('signin');
   }, []);
 
@@ -313,6 +338,7 @@ export default function App() {
           onSignOut={handleSignOut}
           onExport={handleExport}
           onDelete={handleDelete}
+          onSignIn={() => setRoute('signin')}
           onClose={() => setRoute('history')}
         />
       </View>

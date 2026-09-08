@@ -116,12 +116,13 @@ export async function morningSyncStatus(
   const scheduledCount = all.filter((n) => n.identifier === MORNING_SYNC_ID).length;
   const nextAtMs = await kvGetNumber(KEY_MORNING_NEXT_AT);
   const lastFiredMs = await kvGetNumber(KEY_MORNING_LAST_FIRED);
+  const lastScheduledMs = await kvGetNumber(KEY_MORNING_LAST_SCHEDULED);
 
   return {
     scheduledCount,
     nextAtMs,
     lastFiredMs,
-    verdict: judgeMorningSync(nextAtMs, lastFiredMs, nowMs),
+    verdict: judgeMorningSync(nextAtMs, lastFiredMs, nowMs, lastScheduledMs),
   };
 }
 

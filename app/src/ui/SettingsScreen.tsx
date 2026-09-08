@@ -18,12 +18,15 @@ interface Props {
   readonly onSignOut: () => Promise<void>;
   readonly onExport: () => Promise<void>;
   readonly onDelete: () => Promise<void>;
+  readonly onSignIn: () => void;
   readonly onClose: () => void;
 }
 
 export function SettingsScreen(p: Props) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const signedIn = p.email !== null;
 
   const run = async (label: string, fn: () => Promise<void>) => {
     setBusy(label);
@@ -55,7 +58,9 @@ export function SettingsScreen(p: Props) {
   return (
     <ScrollView style={t.screen} contentContainerStyle={t.content}>
       <Text style={t.h1}>Settings</Text>
-      <Text style={t.sub}>{p.email ?? 'Not signed in'}</Text>
+      <Text style={t.sub}>
+        {p.email ?? 'Not signed in — everything stays on this phone'}
+      </Text>
 
       <Text style={t.h2}>What leaves this phone</Text>
       <View style={t.card}>
@@ -80,6 +85,8 @@ export function SettingsScreen(p: Props) {
         </Text>
       </View>
 
+      {signedIn && (
+        <>
       <Text style={t.h2}>Sync</Text>
       <View style={t.row}>
         <Text style={t.rowLabel}>Nights waiting to upload</Text>
@@ -91,41 +98,60 @@ export function SettingsScreen(p: Props) {
           {p.clockOffsetMin === null ? 'not measured' : `${p.clockOffsetMin >= 0 ? '+' : ''}${p.clockOffsetMin} min`}
         </Text>
       </View>
+        </>
+      )}
 
-      <Text style={t.h2}>Your data</Text>
-      <Pressable
-        style={t.buttonGhost}
-        onPress={() => void run('export', p.onExport)}
-        disabled={busy !== null}
-      >
-        <Text style={t.buttonGhostText}>
-          {busy === 'export' ? 'Preparing…' : 'Export my data'}
-        </Text>
-      </Pressable>
+      <Text style={t.h2}>Your account</Text>
+      {signedIn ? (
+        <>
+          <Pressable
+            style={t.buttonGhost}
+            onPress={() => void run('export', p.onExport)}
+            disabled={busy !== null}
+          >
+            <Text style={t.buttonGhostText}>
+              {busy === 'export' ? 'Preparing…' : 'Export my data'}
+            </Text>
+          </Pressable>
 
-      <Pressable
-        style={t.buttonGhost}
-        onPress={() => void run('signout', p.onSignOut)}
-        disabled={busy !== null}
-      >
-        <Text style={t.buttonGhostText}>
-          {busy === 'signout' ? 'Signing out…' : 'Sign out'}
-        </Text>
-      </Pressable>
+          <Pressable
+            style={t.buttonGhost}
+            onPress={() => void run('signout', p.onSignOut)}
+            disabled={busy !== null}
+          >
+            <Text style={t.buttonGhostText}>
+              {busy === 'signout' ? 'Signing out…' : 'Sign out'}
+            </Text>
+          </Pressable>
 
-      <Pressable
-        style={[t.buttonGhost, { borderColor: colors.missed }]}
-        onPress={confirmDelete}
-        disabled={busy !== null}
-      >
-        {busy === 'delete' ? (
-          <ActivityIndicator color={colors.missed} />
-        ) : (
-          <Text style={[t.buttonGhostText, { color: colors.missed }]}>
-            Delete my account and all my data
+          <Pressable
+            style={[t.buttonGhost, { borderColor: colors.missed }]}
+            onPress={confirmDelete}
+            disabled={busy !== null}
+          >
+            {busy === 'delete' ? (
+              <ActivityIndicator color={colors.missed} />
+            ) : (
+              <Text style={[t.buttonGhostText, { color: colors.missed }]}>
+                Delete my account and all my data
+              </Text>
+            )}
+          </Pressable>
+        </>
+      ) : (
+        <>
+          {/* Signed out: exporting, signing out and deleting have nothing to act
+              on, so they are not shown at all rather than shown and failing. */}
+          <Text style={t.body}>
+            You are not signed in. Your nights are being worked out and kept on this
+            phone, and nothing is being sent anywhere. Sign in to keep them on your
+            own account.
           </Text>
-        )}
-      </Pressable>
+          <Pressable style={t.button} onPress={p.onSignIn} disabled={busy !== null}>
+            <Text style={t.buttonText}>Sign in</Text>
+          </Pressable>
+        </>
+      )}
 
       {error !== null && (
         <View style={t.notice}>

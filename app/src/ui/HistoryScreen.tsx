@@ -127,8 +127,9 @@ export function HistoryScreen(p: Props) {
       </Pressable>
 
       <Text style={t.footnote}>
-        Your sleep and heart-rate readings stay on this phone. Zenoho has no account
-        and sends nothing anywhere.
+        Your sleep times and heart rate stay on this phone. When you are signed in,
+        only the result of each night — kept, missed or no data — is sent to your
+        account. Settings explains exactly what does and does not leave.
       </Text>
       <Text style={t.footnote}>
         The morning reminder can arrive late, or not at all, depending on how your

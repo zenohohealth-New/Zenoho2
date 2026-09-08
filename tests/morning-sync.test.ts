@@ -60,27 +60,49 @@ describe('judgeMorningSync', () => {
   it('reports FIRED when a fire was recorded at or after the last due time', () => {
     // The real observation: due 08:00, fired 08:05.
     const fired = LAST_DUE + 5 * 60_000;
-    expect(judgeMorningSync(NEXT, fired, fired + 60_000).state).toBe('FIRED');
+    expect(judgeMorningSync(NEXT, fired, fired + 60_000, LAST_DUE - DAY).state).toBe('FIRED');
+  });
+
+  it('reports NOT_YET_OBSERVED when scheduling was recorded after the due time', () => {
+    // The false alarm this fixes: the trigger fired at 08:05 on 2026-09-08, but the
+    // bookkeeping table was created later that day, so no record could exist. The
+    // screen accused the OS of dropping a notification that had arrived.
+    const scheduledAfter = LAST_DUE + 3 * 60 * 60_000; // recorded at 11:00
+    const wellPast = LAST_DUE + (MISSED_FIRE_GRACE_MIN + 60) * 60_000;
+    expect(judgeMorningSync(NEXT, null, wellPast, scheduledAfter).state).toBe(
+      'NOT_YET_OBSERVED',
+    );
+  });
+
+  it('reports NOT_YET_OBSERVED when there is no scheduling record at all', () => {
+    const wellPast = LAST_DUE + (MISSED_FIRE_GRACE_MIN + 60) * 60_000;
+    expect(judgeMorningSync(NEXT, null, wellPast, null).state).toBe('NOT_YET_OBSERVED');
   });
 
   it('tolerates a long OEM delay without calling it a miss', () => {
+    const scheduledBefore = LAST_DUE - 6 * 60 * 60_000;
     const late = LAST_DUE + (MISSED_FIRE_GRACE_MIN - 1) * 60_000;
-    expect(judgeMorningSync(NEXT, null, late).state).toBe('PENDING');
+    expect(judgeMorningSync(NEXT, null, late, scheduledBefore).state).toBe('PENDING');
   });
 
-  it('reports MISSED once the grace window has passed with no fire', () => {
+  it('reports MISSED only when it was actually watching and saw nothing', () => {
+    const scheduledBefore = LAST_DUE - 6 * 60 * 60_000; // recorded the night before
     const wellPast = LAST_DUE + (MISSED_FIRE_GRACE_MIN + 30) * 60_000;
-    expect(judgeMorningSync(NEXT, null, wellPast).state).toBe('MISSED');
+    expect(judgeMorningSync(NEXT, null, wellPast, scheduledBefore).state).toBe('MISSED');
   });
 
   it('never reports FIRED from a stale fire recorded before the last due time', () => {
     // Yesterday's fire must not vouch for today's.
     const staleFire = LAST_DUE - 2 * 60_000;
+    const scheduledBefore = LAST_DUE - 6 * 60 * 60_000;
     const wellPast = LAST_DUE + (MISSED_FIRE_GRACE_MIN + 30) * 60_000;
-    expect(judgeMorningSync(NEXT, staleFire, wellPast).state).toBe('MISSED');
+    expect(judgeMorningSync(NEXT, staleFire, wellPast, scheduledBefore).state).toBe('MISSED');
   });
 
   it('is PENDING before the due time even with no fire yet', () => {
-    expect(judgeMorningSync(NEXT, null, LAST_DUE - 60 * 60_000).state).toBe('PENDING');
+    const scheduledBefore = LAST_DUE - 6 * 60 * 60_000;
+    expect(judgeMorningSync(NEXT, null, LAST_DUE - 60 * 60_000, scheduledBefore).state).toBe(
+      'PENDING',
+    );
   });
 });
