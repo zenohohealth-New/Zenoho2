@@ -523,6 +523,33 @@ Additional kinds are a migration away, and adding one later is cheap. Removing o
 have used it is not.
 Status: DECIDED
 
+## D-044 · 2026-09-08 · One migrations directory: backend/supabase/migrations/, tracked
+There is exactly one home for migrations, `backend/supabase/migrations/`. It is tracked, it is
+canonical, and it is the directory the Supabase CLI actually reads. `backend/migrations/` is
+deleted.
+
+Why, from the near-miss that produced it: the repo kept migrations in `backend/migrations/` while
+`.gitignore` excluded `backend/supabase/migrations/` as a "build artifact". During T-004A the new
+migration was committed to the tracked directory, and `supabase db push` reported **"Remote
+database is up to date"** and applied nothing — because the file was not in the directory the CLI
+looks at. It was caught only because the tests that followed would have failed against a schema
+that did not exist. The failure mode it was one step away from is worse than not applying: a
+migration reviewed in the repo while a different one is applied to production, with nothing
+anywhere reporting a difference.
+
+Two copies of a file that must never diverge, with no mechanism keeping them in step, is not a
+staging area — it is an unenforced invariant. The fix is to have one file.
+
+Verification: `supabase db push` reports "Remote database is up to date" against the new
+canonical directory, and git recorded the change as a rename rather than a delete-plus-add, which
+is itself proof the two copies were byte-identical.
+
+Not covered by this decision: `backend/functions/` is still copied into
+`backend/supabase/functions/` at deploy time, and those two are byte-identical today. It is the
+same hazard in a place where a wrong deploy is louder — the function either works or it does not
+— but it is the same hazard. Recorded here so the next person does not have to rediscover it.
+Status: DECIDED
+
 ## T-003 · REOPENED by the checker · 2026-09-08
 T-003 is **REOPENED**, not IN_REVIEW. Two acceptance criteria remain open:
 - **AC-3.5** — NOT VERIFIED. No live session has been intercepted.

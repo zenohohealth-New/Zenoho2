@@ -78,10 +78,14 @@ Thumbs.db
 HANDOFF-*.md
 
 # --- Supabase CLI staging area ---
-# Canonical migrations and functions live in backend/migrations and
-# backend/functions (T-003). The CLI insists on its own supabase/ layout, so
-# those are copied there at deploy time; the copy is a build artifact.
-backend/supabase/migrations/
+# D-044: backend/supabase/migrations/ is now the ONE canonical, TRACKED home for
+# migrations, and is deliberately NOT ignored here. Ignoring it is what caused
+# the T-004A near-miss: the repo held the migration, the CLI read a different
+# directory, and `db push` reported "up to date" having applied nothing.
+#
+# backend/functions/ is still the canonical source for edge functions and is
+# copied into supabase/functions/ at deploy time. That copy carries the same
+# drift risk and is not covered by D-044 - see R-004A.
 backend/supabase/functions/
 backend/supabase/.temp/
 
