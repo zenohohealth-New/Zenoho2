@@ -250,7 +250,7 @@ export function HarnessScreen({ commitment, commitmentId, onClose }: Props) {
 
       <Text style={t.h2}>Eligibility</Text>
       <Row label="Outcome" value={probe.eligibility?.outcome ?? '—'} />
-      <Row label="Brand unverified" value={fmt(probe.eligibility?.brandUnverified)} />
+      <Row label="Qualifying sources" value={probe.eligibility?.qualifyingSources.join(', ') || '-'} />
       {probe.eligibility?.outcome === 'NO_WEARABLE_SOURCE' && (
         <View style={t.notice}>
           <Text style={t.noticeTitle}>{NO_WEARABLE_COPY.title}</Text>

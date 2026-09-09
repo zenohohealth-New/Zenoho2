@@ -469,10 +469,10 @@
       }
     },
     {
-      "id": "EXTRA-12-unknown-origin-with-hr-is-unverified",
+      "id": "EXTRA-12-unfamiliar-brand-derives-normally",
       "ac": "beyond AC-2",
       "kind": "derive",
-      "description": "Spec section 9: an unlisted brand with HR still counts, but is flagged UNVERIFIED.",
+      "description": "D-042: an app nobody has ever listed derives exactly like any other. There is no unverified-brand downgrade, because there are no brands.",
       "platform": "android",
       "input": {
         "nightDate": "2026-09-07",
@@ -501,17 +501,17 @@
       },
       "expected": {
         "state": "KEPT",
-        "integrity": "UNVERIFIED",
+        "integrity": "OK",
         "wearPresence": true,
         "deviationMin": 10,
         "sourceId": "com.newbrand.watchapp"
       }
     },
     {
-      "id": "EXTRA-13-phone-os-origin-is-blocked",
+      "id": "EXTRA-13-phone-inferred-sleep-has-no-hr",
       "ac": "beyond AC-2",
       "kind": "derive",
-      "description": "D-003: sleep written by the Health Connect platform itself is not a wearable.",
+      "description": "D-042 + D-003's surviving phone rule: a phone health app infers a sleep session and has no heart rate to back it, because a phone has no sensor for one. Ineligible on the data, not on the package name.",
       "platform": "android",
       "input": {
         "nightDate": "2026-09-07",
@@ -523,27 +523,22 @@
         },
         "sessions": [
           {
-            "sourceId": "com.google.android.apps.healthdata",
+            "sourceId": "com.sec.android.app.shealth",
             "startIso": "2026-09-06T17:40:00Z",
             "endIso": "2026-09-07T01:05:00Z",
             "recordingMethod": "AUTOMATIC"
           }
         ],
         "hr": {
-          "mode": "cover",
-          "sourceId": "com.google.android.apps.healthdata",
-          "startIso": "2026-09-06T17:40:00Z",
-          "endIso": "2026-09-07T01:05:00Z",
-          "everyMin": 10,
-          "recordingMethod": "AUTOMATIC"
+          "mode": "none"
         }
       },
       "expected": {
         "state": "NO_DATA",
-        "integrity": "NO_SOURCE",
+        "integrity": "NO_WEAR",
         "wearPresence": false,
         "deviationMin": null,
-        "sourceId": null
+        "sourceId": "com.sec.android.app.shealth"
       }
     },
     {
@@ -711,10 +706,10 @@
       }
     },
     {
-      "id": "EXTRA-19-hr-from-blocked-source-cannot-prove-wear",
+      "id": "EXTRA-19-hr-from-ineligible-source-cannot-prove-wear",
       "ac": "beyond AC-2",
       "kind": "derive",
-      "description": "D-019: sleep from Garmin but HR written by the phone -> L2 unsatisfied, NO_WEAR.",
+      "description": "D-019: sleep from a watch but the only heart rate covering it was typed in by hand -> L2 unsatisfied, NO_WEAR. Manual entry is the one thing D-042 still refuses.",
       "platform": "android",
       "input": {
         "nightDate": "2026-09-07",
@@ -738,7 +733,7 @@
           "startIso": "2026-09-06T17:40:00Z",
           "endIso": "2026-09-07T01:05:00Z",
           "everyMin": 10,
-          "recordingMethod": "AUTOMATIC"
+          "recordingMethod": "MANUAL"
         }
       },
       "expected": {

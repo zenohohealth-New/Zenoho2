@@ -109,15 +109,16 @@ export function deriveDailyState(
     return noDataResult(nightDate, 'NO_SOURCE', 'NO_DATA', null, computedAt, 0);
   }
 
-  const { session, verdict } = pick;
+  // `verdict` is no longer destructured: with the brand lists gone (D-042) the
+  // only thing it could say about an accepted session is that it was accepted.
+  const { session } = pick;
 
-  // D-019: only HR from a source that is not blocked may prove wear time, so a
-  // phone-written or manually entered heart rate cannot satisfy L2. Unknown
-  // brands still count, preserving §9's rule that a new brand is flagged rather
-  // than silently excluded.
+  // D-019: only HR from an eligible source may prove wear time, so a manually
+  // entered heart rate cannot satisfy L2. Under D-042 that is the whole test —
+  // every automatically recorded source counts, whatever wrote it.
   const acceptHrSource = (sample: HrSample) =>
-    classifySource(sample.sourceId, sample.recordingMethod, platform).sourceClass !==
-    'BLOCKED';
+    classifySource(sample.sourceId, sample.recordingMethod, platform).sourceClass ===
+    'ELIGIBLE';
 
   const wear = wearPresence(hr, session.startMs, session.endMs, acceptHrSource);
   if (!wear.present) {
@@ -137,9 +138,10 @@ export function deriveDailyState(
   const state: DailyStateValue =
     Math.abs(bedDevMin) <= tol && Math.abs(wakeDevMin) <= tol ? 'KEPT' : 'MISSED';
 
-  // integrity = OK, then L3 and the §9 unknown-brand rule may downgrade it.
+  // integrity = OK, then L3 may downgrade it. The brand-unverified downgrade is
+  // gone with the brand lists (D-042): there are no unverified brands any more,
+  // only sources that did or did not send usable data.
   let integrity: IntegrityFlag = 'OK';
-  if (verdict.brandUnverified) integrity = 'UNVERIFIED';
   const coherence = rhrCoherence(input.rhrHistory, nightDate);
   if (coherence.evaluated && coherence.drifted) integrity = 'UNVERIFIED';
 

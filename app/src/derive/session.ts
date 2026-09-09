@@ -52,7 +52,7 @@ export function selectMainSession(
     if (s.endMs <= s.startMs) continue;
 
     const verdict = classifySource(s.sourceId, s.recordingMethod, platform);
-    if (verdict.sourceClass === 'BLOCKED') continue;
+    if (verdict.sourceClass !== 'ELIGIBLE') continue;
 
     const duration = s.endMs - s.startMs;
     // Ties break towards the earlier start so the pick is deterministic.

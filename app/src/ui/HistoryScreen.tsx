@@ -9,9 +9,16 @@
  */
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import type { Commitment, DerivedNight } from '../derive/types';
+import { NO_DATA_HINT } from '../eligibility';
 import { colors, hhmm, prettyDate, stateColor, t } from './theme';
 
-const STATE_LABEL: Record<string, string> = {
+/**
+ * The one place a state becomes words. Exported because App.tsx was writing the
+ * raw enum into the status line — "Last night: NO_DATA." — while this map sat a
+ * few lines away rendering "No data" in the list directly above it. Two
+ * vocabularies for one value on one screen.
+ */
+export const STATE_LABEL: Record<string, string> = {
   KEPT: 'Kept',
   MISSED: 'Missed',
   NO_DATA: 'No data',
@@ -85,6 +92,13 @@ export function HistoryScreen(p: Props) {
             {last.integrity === 'UNVERIFIED' ? ' · unverified' : ''}
             {!last.frozen ? ' · may still change today' : ''}
           </Text>
+          {/*
+            A No-data night used to say only "No data", which tells the member
+            nothing they can act on. The founder lost 2026-09-09 to a watch in
+            battery-saver mode - the sleep session arrives, the heart rate does
+            not, and nothing on screen pointed at the cause.
+          */}
+          {last.state === 'NO_DATA' && <Text style={t.sub}>{NO_DATA_HINT}</Text>}
         </View>
       ) : (
         <View style={[t.card, t.empty]}>

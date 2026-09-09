@@ -42,10 +42,11 @@ import {
 } from './src/backend/sync';
 import { pendingCount } from './src/backend/syncQueue';
 import { KEY_CLOCK_OFFSET_MIN, kvGetNumber } from './src/storage/kv';
+import { NO_DATA_HINT } from './src/eligibility';
 import { CommitmentScreen } from './src/ui/CommitmentScreen';
 import { SignInScreen } from './src/ui/SignInScreen';
 import { SettingsScreen } from './src/ui/SettingsScreen';
-import { HistoryScreen } from './src/ui/HistoryScreen';
+import { HistoryScreen, STATE_LABEL } from './src/ui/HistoryScreen';
 import { HarnessScreen } from './src/ui/HarnessScreen';
 import { colors, t } from './src/ui/theme';
 
@@ -172,7 +173,8 @@ export default function App() {
           setError(outcome.readErrors.map((e) => `${e.kind}: ${e.message}`).join('\n'));
           note = 'Read partly failed — see the note at the top of this screen.';
         } else {
-          note = `Last night: ${outcome.stored.state}.`;
+          note = `Last night: ${STATE_LABEL[outcome.stored.state] ?? outcome.stored.state}.`;
+          if (outcome.stored.state === 'NO_DATA') note += ` ${NO_DATA_HINT}`;
         }
 
         await refreshSummary(c.id);
@@ -220,13 +222,21 @@ export default function App() {
         let sessionKnown = false;
         if (backendConfigured()) {
           try {
-            const { data } = await getSupabase().auth.getSession();
+            const { data, error } = await getSupabase().auth.getSession();
             session = data.session;
-            sessionKnown = true;
+            // `error` matters as much as the throw, and this is the case T-003-R
+            // got wrong. supabase-js does not throw when it cannot refresh: with
+            // an expired access token and no network it RETURNS
+            // `{ session: null, error: AuthRetryableFetchError }`. Reading only
+            // `data` therefore looked exactly like "signed out", and a signed-in
+            // member opening the app offline an hour after their last refresh
+            // would have been thrown back to the sign-in screen — the very
+            // failure `sessionKnown` was added to prevent.
+            sessionKnown = error === null;
             if (session?.user.email) setEmail(session.user.email);
           } catch {
             // Backend unreachable or misconfigured: the app is still fully usable
-            // on-device, so this must not block boot.
+            // on-device, so this must not block boot. sessionKnown stays false.
           }
         }
 
