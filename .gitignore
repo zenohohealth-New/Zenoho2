@@ -78,15 +78,13 @@ Thumbs.db
 HANDOFF-*.md
 
 # --- Supabase CLI staging area ---
-# D-044: backend/supabase/migrations/ is now the ONE canonical, TRACKED home for
-# migrations, and is deliberately NOT ignored here. Ignoring it is what caused
-# the T-004A near-miss: the repo held the migration, the CLI read a different
-# directory, and `db push` reported "up to date" having applied nothing.
+# D-044: backend/supabase/migrations/ and backend/supabase/functions/ are the
+# ONE canonical, TRACKED home for migrations and edge functions, and are
+# deliberately NOT ignored here. Ignoring them is what caused the T-004A
+# near-miss: the repo held the migration, the CLI read a different directory,
+# and `db push` reported "up to date" having applied nothing.
 #
-# backend/functions/ is still the canonical source for edge functions and is
-# copied into supabase/functions/ at deploy time. That copy carries the same
-# drift risk and is not covered by D-044 - see R-004A.
-backend/supabase/functions/
+# Only the CLI's own scratch state is ignored below.
 backend/supabase/.temp/
 
 # vitest json reporter output (accidentally committed once in dc8e473)

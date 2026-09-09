@@ -33,7 +33,7 @@ range). For T-001/T-002 files, read R-001 and R-002.
 | File | Why |
 |---|---|
 | `backend/supabase/migrations/20260908000001_init.sql` (moved by D-044; was `backend/migrations/`) | The whole schema: users, commitments, daily_states, push_tokens; RLS enabled **and** forced; `server_now()` for the clock probe |
-| `backend/functions/delete-account/index.ts` | AC-3.8 hard delete; identifies the caller under RLS with their own token, then deletes with service-role |
+| `backend/supabase/functions/delete-account/index.ts` (moved by D-044; was `backend/functions/`) | AC-3.8 hard delete; identifies the caller under RLS with their own token, then deletes with service-role |
 | `backend/tests/rls_denial.sql` | AC-3.3/AC-3.9, 8 checks against the live database; opens by asserting the seed row is visible so a later "0 rows" means denial, not emptiness |
 | `backend/supabase/config.toml`, `.gitignore` | CLI project config; `.temp` (which holds the project ref) is ignored |
 | `backend/templates/magic-link.html`, `confirm-signup.html` | Paste-ready auth emails carrying `{{ .Token }}` and no link, because Site URL is `localhost:3000` and dead on a phone. **Still not pasted into the dashboard.** |

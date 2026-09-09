@@ -544,10 +544,17 @@ Verification: `supabase db push` reports "Remote database is up to date" against
 canonical directory, and git recorded the change as a rename rather than a delete-plus-add, which
 is itself proof the two copies were byte-identical.
 
-Not covered by this decision: `backend/functions/` is still copied into
-`backend/supabase/functions/` at deploy time, and those two are byte-identical today. It is the
-same hazard in a place where a wrong deploy is louder — the function either works or it does not
-— but it is the same hazard. Recorded here so the next person does not have to rediscover it.
+**Extended 2026-09-09 to edge functions, by the same reasoning.** `backend/functions/` is
+deleted; `backend/supabase/functions/` is the single canonical, tracked directory. It was the
+identical arrangement — a tracked source copied into an ignored directory that the CLI actually
+reads — and the argument against it does not change because the failure would have been noisier.
+A wrong function deploy does fail loudly, but "loudly" only helps if someone is looking, and the
+version that ships is still the untracked copy either way.
+
+Verification: `supabase functions deploy delete-account` succeeded from the new path, and git
+recorded the move as a rename, proving the two copies were byte-identical.
+
+Nothing under `backend/supabase/` is ignored now except `.temp/`, the CLI's own scratch state.
 Status: DECIDED
 
 ## T-003 · REOPENED by the checker · 2026-09-08
