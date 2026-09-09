@@ -23,6 +23,12 @@ You are the MAKER for Zenoho2. Claude Web is the CHECKER. The founder is the app
 - Do not mark a task DONE; set IN_REVIEW. The checker marks DONE.
 
 ## External contracts (things outside the repo that can break it)
+- **AC-3.5-v — LAUNCH GATE, unmet.** Before any invite goes out, proxy the phone (mitmproxy) and
+  capture one **KEPT** night's upload, then confirm the body carries no timestamp inside the
+  sleep window, no HR value and no RHR value. T-003 closed AC-3.5 at the *key* level only:
+  PostgREST rejects unknown columns before auth, so no forbidden key can have been sent — but
+  that says nothing about values hidden inside permitted columns, and the proof was taken on a
+  NO_DATA night, the weakest case. See reports/R-003-R.md §7.
 - **D-038**: prove it before asking the founder to touch the phone. Verify against the live
   system first; a device run confirms, it does not discover.
 - **Supabase free project pauses after 7 idle days.** A paused project fails every request, and

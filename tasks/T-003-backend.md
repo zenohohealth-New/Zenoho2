@@ -1,24 +1,30 @@
 # T-003 · Backend: identity, sync of derived states, privacy enforcement
 
-Status: **AWAITING_DEVICE_RUN** (T-003-R) — code complete, no device evidence yet (D-040)
-Report: reports/R-003-R.md. Becomes IN_REVIEW once AC-R1..R8 have device evidence.
+Status: **DONE pending checker report review** (T-003 + T-003-R)
 Owner: Claude Code (maker) · Reviewer: Claude Web (checker)
-Report: reports/R-003-backend.md · Handoff: reports/CC-HANDOFF-2026-09-08.md
+Reports: reports/R-003-backend.md, reports/R-003-R.md · Handoff: reports/CC-HANDOFF-2026-09-08.md
 
-Device run 2026-09-08 ~16:00 IST on APK e1a3bdd4, S26 Ultra / Android 16:
-AC-3.1 PASS, AC-3.2 PASS, AC-3.7 PASS, AC-3.8 PASS. AC-3.3 and AC-3.9 MET by the SQL suite.
-AC-3.4 met in tests; its live half is AC-3.5.
+Device run 2026-09-08 on APK e1a3bdd4 (S26 Ultra / Android 16):
+AC-3.1, AC-3.2, AC-3.7, AC-3.8 PASS. AC-3.3 and AC-3.9 MET by the SQL suite (8/8).
 
-Open:
-- **AC-3.5 NOT VERIFIED** - no live session intercepted.
-- **AC-3.6 FAIL (DEF-003-01)** - offline, tapping "Check last night" produces zero visual
-  change: no loading state, no error, no verdict. Undiagnosed.
+Device run 2026-09-09 on APK 2eb5c840 (same device):
+**AC-R1, AC-R2, AC-R3, AC-R6 PASS. DEF-003-01 CLOSED.** AC-R4 accepted - the 2026-09-09 row holds
+exactly the spec 7 columns plus device_clock_offset_min, state NO_DATA (R-003-R 7a).
 
-Deliverable 4 is **PARTIAL**: the local queue is implemented, "retry on next foreground" is
-NOT IMPLEMENTED - there is no AppState listener anywhere in the app, and drainQueue() is called
-from one place inside the "Check last night" handler. AC-3.6 could not have passed as written
-regardless of DEF-003-01. Per D-040 this reopens the task rather than counting as a review
-defect.
+AC-3.5: **closed at the key level.** PostgREST validates payload columns before authorization
+(PGRST204 at HTTP 400, ahead of the RLS 42501 at 401), so a body carrying an HR, RHR or epoch-ms
+key is refused and writes nothing. The row exists, therefore the device's body carried only
+daily_states columns. Proven against the live project, not against mocks. See R-003-R 7.
+
+Carried forward, NOT a T-003 gate:
+- **AC-3.5-v** - value-level proof. Proxy the phone (mitmproxy) and capture one KEPT night's
+  upload; paste the body verbatim and confirm no timestamp, HR or RHR value. The key-level proof
+  constrains keys, not values, and it was taken on a NO_DATA night with a null source_id - the
+  weakest case. **LAUNCH GATE: must pass before any invite goes out.** Recorded in CLAUDE.md
+  under External contracts.
+- **AC-R5** - offline with Health Connect permission revoked. Deferred to T-005 by the checker.
+
+Only the checker marks this DONE.
 
 ## Goal
 The app gets an identity and a server, and the server learns only what spec §7 allows. After this task a user can sign in, their derived nights sync up, they can export and delete everything, and a test proves that no raw sleep or heart-rate value can reach the server and that no user can read another user's rows. Pods, witnesses and reactions are NOT in this task (T-004).
