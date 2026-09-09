@@ -165,7 +165,7 @@ do $$
 begin
   insert into public.reactions (from_user_id, to_user_id, night_date, kind)
   values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
-          date '2026-09-06', 'WELL_DONE');
+          date '2026-09-06', 'SEEN');
   insert into pod_results values (6, 'W reacts to M once', 'PASS: accepted');
 exception when others then
   insert into pod_results values (6, 'W reacts to M once', 'FAIL: refused (' || sqlstate || ')');
@@ -176,7 +176,7 @@ do $$
 begin
   insert into public.reactions (from_user_id, to_user_id, night_date, kind)
   values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
-          date '2026-09-06', 'NUDGE');
+          date '2026-09-06', 'SEEN');
   insert into pod_results values (7, 'W reacts twice on one night', 'FAIL: duplicate accepted');
 exception
   when unique_violation then
@@ -208,7 +208,7 @@ do $$
 begin
   insert into public.reactions (from_user_id, to_user_id, night_date, kind)
   values ('cccccccc-cccc-cccc-cccc-cccccccccccc', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
-          date '2026-09-05', 'NUDGE');
+          date '2026-09-05', 'SEEN');
   insert into pod_results values (10, 'P reacts to M', 'FAIL: accepted');
 exception when others then
   insert into pod_results values (10, 'P reacts to M', 'PASS: refused (' || sqlstate || ')');
@@ -372,6 +372,18 @@ select 26, 'projection excludes deviation_min/integrity/source_id/wear_presence'
                     select unnest(p.proargnames) from pg_proc p
                     where p.oid = 'public.witness_nights(uuid)'::regprocedure)) = 0
             then 'PASS: none present' else 'FAIL: a forbidden column is projected' end;
+
+-- D-043 must be a constraint, not a convention: any other kind is refused.
+do $$
+begin
+  insert into public.reactions (from_user_id, to_user_id, night_date, kind)
+  values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'cccccccc-cccc-cccc-cccc-cccccccccccc',
+          date '2026-09-04', 'WELL_DONE');
+  insert into pod_results values (27, 'reaction kind other than SEEN', 'FAIL: accepted');
+exception when others then
+  insert into pod_results values (27, 'reaction kind other than SEEN',
+    'PASS: refused (' || sqlstate || ')');
+end $$;
 
 select seq, check_name, result from pod_results order by seq;
 

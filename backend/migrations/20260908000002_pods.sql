@@ -73,7 +73,13 @@ create table if not exists public.reactions (
   from_user_id uuid not null references public.users (id) on delete cascade,
   to_user_id   uuid not null references public.users (id) on delete cascade,
   night_date   date not null,
-  kind         text not null check (kind in ('SEEN', 'NUDGE', 'WELL_DONE')),
+  -- D-043: exactly ONE kind in v1. The thesis under test is that being witnessed
+  -- changes behaviour; judgement stays out of the loop until that is measured.
+  -- More kinds are a migration away, and adding one later is cheap. Shipping
+  -- NUDGE and WELL_DONE now would have made the experiment unreadable, because a
+  -- behaviour change could then be attributed to praise or to pressure rather
+  -- than to being seen.
+  kind         text not null default 'SEEN' check (kind = 'SEEN'),
   created_at   timestamptz not null default now(),
   constraint reactions_not_self check (from_user_id <> to_user_id),
   constraint reactions_one_per_day unique (from_user_id, to_user_id, night_date)

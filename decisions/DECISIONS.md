@@ -484,6 +484,45 @@ a credential — it is embedded in the URL that every app install calls. Securit
 over this.** The question was raised by the maker in the T-003 closing block and is now closed.
 Status: DECIDED
 
+## D-042 · 2026-09-08 · No brand allowlist or blocklist — Health Connect is the gate
+Any device whose companion app writes sleep sessions to Health Connect is supported. There is no
+list of approved brands and no list of excluded ones. If the data arrives, the device counts; if
+it does not, the night is NO_DATA. The platform already answers the only question that matters,
+and it answers it per device rather than per brand.
+
+**Supersedes D-003's exclusion list.** boAt, Noise and Fire-Boltt are no longer excluded by name.
+D-003's substantive rule stands — wearable sources only, phone-written or manual sleep is
+NO_DATA — because that rests on measurement quality, not on a brand's reputation. What is retired
+is the brand judgement layered on top of it: desk research into what a companion app "supports"
+went stale the moment a firmware update shipped, and it excluded users whose device would have
+worked.
+
+**The founder confirms the gym cohort wears mixed brands, so NO_DATA nights in the witness feed
+are a certainty, not a risk.** That has a design consequence T-004B must carry:
+- NO_DATA is a **first-class state**, not an error and not an empty slot. Plain copy, no apology,
+  no implication that the member failed.
+- Every user is told **on day one whether their device is feeding Zenoho** — a check they can run
+  before they are being witnessed, not a mystery they discover from a week of blank rows.
+
+Consequence not yet actioned: `app/src/eligibility/source-allowlist.v2.json` and
+`app/src/eligibility/index.ts` still implement allow / unverifiedBrand / block lists, which this
+decision retires. T-004A is SQL-only, so the app was not touched. **That contradiction is open and
+needs its own task** — see R-004A.
+Status: DECIDED
+
+## D-043 · 2026-09-08 · Exactly one reaction kind in v1: SEEN
+`reactions.kind` permits one value, `SEEN`, enforced by a check constraint. NUDGE and WELL_DONE
+are removed.
+
+Why: the thesis under test is that **being witnessed** changes behaviour. Judgement stays out of
+the loop until that is measured. Shipping praise and pressure alongside it would make the result
+unreadable — a behaviour change could be attributed to encouragement or to nagging rather than to
+the bare fact of being seen, and there would be no way to tell which afterwards.
+
+Additional kinds are a migration away, and adding one later is cheap. Removing one after members
+have used it is not.
+Status: DECIDED
+
 ## T-003 · REOPENED by the checker · 2026-09-08
 T-003 is **REOPENED**, not IN_REVIEW. Two acceptance criteria remain open:
 - **AC-3.5** — NOT VERIFIED. No live session has been intercepted.
