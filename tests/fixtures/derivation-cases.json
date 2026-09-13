@@ -133,7 +133,7 @@
       "id": "AC2-04-no-hr-is-no-data",
       "ac": "AC-2",
       "kind": "derive",
-      "description": "A perfectly timed session with zero HR fails wear presence (D-009 L2).",
+      "description": "A perfectly timed session with zero HR fails wear presence (D-009 L2). D-045: zero own-source HR is NO_HR, not NO_WEAR.",
       "platform": "android",
       "input": {
         "nightDate": "2026-09-07",
@@ -157,7 +157,7 @@
       },
       "expected": {
         "state": "NO_DATA",
-        "integrity": "NO_WEAR",
+        "integrity": "NO_HR",
         "wearPresence": false,
         "deviationMin": null,
         "sourceId": "com.garmin.android.apps.connectmobile"
@@ -511,7 +511,7 @@
       "id": "EXTRA-13-phone-inferred-sleep-has-no-hr",
       "ac": "beyond AC-2",
       "kind": "derive",
-      "description": "D-042 + D-003's surviving phone rule: a phone health app infers a sleep session and has no heart rate to back it, because a phone has no sensor for one. Ineligible on the data, not on the package name.",
+      "description": "D-042 + D-003's surviving phone rule: a phone health app infers a sleep session and has no heart rate to back it, because a phone has no sensor for one. Ineligible on the data, not on the package name. D-045: zero own-source HR is NO_HR, not NO_WEAR.",
       "platform": "android",
       "input": {
         "nightDate": "2026-09-07",
@@ -535,7 +535,7 @@
       },
       "expected": {
         "state": "NO_DATA",
-        "integrity": "NO_WEAR",
+        "integrity": "NO_HR",
         "wearPresence": false,
         "deviationMin": null,
         "sourceId": "com.sec.android.app.shealth"
@@ -709,7 +709,7 @@
       "id": "EXTRA-19-hr-from-ineligible-source-cannot-prove-wear",
       "ac": "beyond AC-2",
       "kind": "derive",
-      "description": "D-019: sleep from a watch but the only heart rate covering it was typed in by hand -> L2 unsatisfied, NO_WEAR. Manual entry is the one thing D-042 still refuses.",
+      "description": "D-019: sleep from a watch but the only heart rate covering it was typed in by hand -> L2 unsatisfied, NO_WEAR. Manual entry is the one thing D-042 still refuses. D-045: zero own-source HR is NO_HR, not NO_WEAR.",
       "platform": "android",
       "input": {
         "nightDate": "2026-09-07",
@@ -738,7 +738,7 @@
       },
       "expected": {
         "state": "NO_DATA",
-        "integrity": "NO_WEAR",
+        "integrity": "NO_HR",
         "wearPresence": false,
         "deviationMin": null,
         "sourceId": "com.garmin.android.apps.connectmobile"
@@ -748,7 +748,7 @@
       "id": "EXTRA-20-manually-entered-hr-cannot-prove-wear",
       "ac": "beyond AC-2",
       "kind": "derive",
-      "description": "D-019: sleep from Garmin but hand-typed HR -> L2 unsatisfied, NO_WEAR.",
+      "description": "D-019: sleep from Garmin but hand-typed HR -> L2 unsatisfied, NO_WEAR. D-045: zero own-source HR is NO_HR, not NO_WEAR.",
       "platform": "android",
       "input": {
         "nightDate": "2026-09-07",
@@ -777,7 +777,7 @@
       },
       "expected": {
         "state": "NO_DATA",
-        "integrity": "NO_WEAR",
+        "integrity": "NO_HR",
         "wearPresence": false,
         "deviationMin": null,
         "sourceId": "com.garmin.android.apps.connectmobile"

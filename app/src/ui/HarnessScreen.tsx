@@ -105,7 +105,7 @@ export function HarnessScreen({ commitment, commitmentId, onClose }: Props) {
       ).filter(Boolean);
 
       const eligibility = checkEligibility(sessions, hr, store.platform, now);
-      const main = selectMainSession(sessions, nightDate, tzOffsetMin, store.platform);
+      const main = selectMainSession(sessions, nightDate, tzOffsetMin, store.platform, hr);
 
       const rhr = await loadRhrHistory(
         store,
@@ -230,7 +230,7 @@ export function HarnessScreen({ commitment, commitmentId, onClose }: Props) {
       <Text style={t.h2}>Health store</Text>
       <Row label="Available" value={fmt(probe.available)} />
       <Row label="Read permission" value={probe.permission ?? '—'} />
-      <Row label="Background read granted" value={fmt(probe.background)} />
+      <Row label="Background read granted (not requested, DEF-005-04)" value={fmt(probe.background)} />
       <Row label="Night date" value={probe.nightDate ?? '—'} />
       <Row label="Sleep sessions read" value={fmt(probe.sessionCount)} />
       <Row label="HR samples read" value={fmt(probe.hrCount)} />

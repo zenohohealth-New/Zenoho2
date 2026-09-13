@@ -42,9 +42,21 @@ export const FORBIDDEN_KEYS: readonly string[] = [
   'computed_at',
 ];
 
-/** ISO 8601 instants and epoch-millisecond integers both count as timestamps. */
+/** ISO 8601 instants and epoch integers, in both common units, count as timestamps. */
 const ISO_INSTANT = /\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/;
 const EPOCH_MS = /\b1[0-9]{12}\b/;
+/**
+ * DEF-005-03: epoch **seconds**, 10 digits. The guard knew only milliseconds, so
+ * `Math.floor(Date.now() / 1000)` — the most ordinary way there is to shrink a
+ * timestamp — walked straight through the check whose entire purpose is to stop
+ * timestamps. A leak does not have to arrive in the unit the author happened to
+ * think of.
+ *
+ * Safe against this payload's real integers: the §7 row carries minutes
+ * (`deviation_min`, `device_clock_offset_min`), a small identity
+ * (`commitment_id`) and booleans. None of them is ten digits beginning with 1.
+ */
+const EPOCH_SEC = /\b1[0-9]{9}\b/;
 
 export class RawHealthLeakError extends Error {
   constructor(readonly detail: string) {
@@ -96,11 +108,21 @@ function walk(value: unknown, path: string, report: (d: string) => never): void 
 
   if (typeof value === 'string') {
     if (ISO_INSTANT.test(value)) report(`ISO timestamp at ${path}`);
+    // Epoch integers must be looked for in text too, not only in numbers.
+    // Found while testing DEF-005-03: `guardedFetch` falls back to scanning the
+    // raw body when it is not JSON, and that fallback reached this branch, where
+    // only the ISO pattern was applied. So a non-JSON body reading
+    // `ts=1757206800000` passed the guard — a hole that predates the
+    // epoch-seconds fix and would have swallowed milliseconds just as happily.
+    if (EPOCH_MS.test(value)) report(`epoch-ms timestamp at ${path}`);
+    if (EPOCH_SEC.test(value)) report(`epoch-seconds timestamp at ${path}`);
     return;
   }
   if (typeof value === 'number') {
-    if (Number.isInteger(value) && EPOCH_MS.test(String(value))) {
-      report(`epoch-ms timestamp at ${path}`);
+    if (Number.isInteger(value)) {
+      const text = String(value);
+      if (EPOCH_MS.test(text)) report(`epoch-ms timestamp at ${path}`);
+      if (EPOCH_SEC.test(text)) report(`epoch-seconds timestamp at ${path}`);
     }
     return;
   }

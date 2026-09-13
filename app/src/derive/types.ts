@@ -54,6 +54,8 @@ export type IntegrityFlag =
   | 'OK'
   | 'UNVERIFIED'
   | 'NO_SOURCE'
+  /** Sleep arrived, but its own source supplied no heart rate across it (D-045). */
+  | 'NO_HR'
   | 'NO_WEAR'
   | 'TRAVEL';
 

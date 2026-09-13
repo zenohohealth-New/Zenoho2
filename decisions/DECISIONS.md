@@ -557,6 +557,40 @@ recorded the move as a rename, proving the two copies were byte-identical.
 Nothing under `backend/supabase/` is ignored now except `.temp/`, the CLI's own scratch state.
 Status: DECIDED
 
+## D-045 · 2026-09-13 · A sleep session is eligible only if the SAME source supplies its heart rate
+Heart rate may vouch for a sleep session only when it was written by the same source. "Some
+eligible heart rate overlaps this session" is not enough, in `hasOwnSourceHr`, in the
+`wearPresence` predicate, or in `selectMainSession`.
+
+Why, from the defect that produced it (DEF-005-01, found by the checker in audit AUDIT-01): T-005
+replaced D-003's brand lists with a data test — a session counts if heart rate covers it, because
+a phone cannot measure heart rate through a night. Implemented as written, that test only asked
+whether *any* eligible HR overlapped the session window. On a night when the member wore a watch
+AND their phone inferred sleep from screen-off time, the phone's session borrowed the watch's
+heart rate as its own evidence. The two records shared nothing but a clock.
+
+It was worse than a false positive. The phone's inferred session is usually the *longer* of the
+two, so it won `selectMainSession`, and the night was then derived from phone-inferred bed and
+wake times with `integrity = OK`. The phone exclusion that D-042 was careful to preserve was
+defeated on exactly the nights it was written for.
+
+**New integrity value: `NO_HR`**, distinct from `NO_SOURCE` and from `NO_WEAR`.
+- `NO_SOURCE` — no eligible sleep session at all.
+- `NO_HR` — a session arrived, but its own source sent no heart rate across it.
+- `NO_WEAR` — own-source heart rate exists, but covers less than 70% of the session.
+
+The distinction is not cosmetic. Reporting NO_HR as NO_SOURCE told a member no wearable was seen
+on a night when one had written a session all night, which sends them to look in the wrong place.
+
+Consequences carried out with this decision:
+- `daily_states.integrity` has a CHECK constraint that does not list NO_HR, so
+  `backend/supabase/migrations/20260913000003_no_hr_integrity.sql` extends it. **The app produces
+  the value before the constraint accepts it, so until that migration is applied every NO_HR
+  night is refused with a 400 and re-queues forever.**
+- Spec §7's integrity ladder gains a rung between NO_SOURCE and NO_WEAR, and should be updated to
+  match; the code and this decision are the source of truth until it is.
+Status: DECIDED
+
 ## T-003 · REOPENED by the checker · 2026-09-08
 T-003 is **REOPENED**, not IN_REVIEW. Two acceptance criteria remain open:
 - **AC-3.5** — NOT VERIFIED. No live session has been intercepted.

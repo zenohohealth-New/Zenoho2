@@ -184,7 +184,75 @@ describe('§5 helpers', () => {
       endMs: Date.parse('2026-09-07T02:00:00Z'),
       recordingMethod: 'MANUAL' as const,
     };
-    const pick = selectMainSession([longerManual, wearable], '2026-09-07', 330, 'android');
+    // D-045: both candidates need own-source HR, or neither is selectable and
+    // the test would pass for the wrong reason.
+    const hr = [
+      {
+        sourceId: 'com.garmin.android.apps.connectmobile',
+        atMs: Date.parse('2026-09-06T18:00:00Z'),
+        bpm: 55,
+        recordingMethod: 'AUTOMATIC' as const,
+      },
+    ];
+    const pick = selectMainSession([longerManual, wearable], '2026-09-07', 330, 'android', hr);
     expect(pick?.session.startMs).toBe(wearable.startMs);
+  });
+
+  // DEF-005-01 / D-045. Before the fix this returned the phone's session: it was
+  // longer, its source was eligible, and the watch's heart rate — from a
+  // completely unrelated record — was accepted as evidence for it. The night
+  // would have been derived from phone-inferred times with integrity OK.
+  it('a longer session with no HR of its own loses to a shorter one that has HR', () => {
+    const WATCH = 'com.garmin.android.apps.connectmobile';
+    const PHONE = 'com.sec.android.app.shealth';
+
+    const watchSession = {
+      sourceId: WATCH,
+      startMs: Date.parse('2026-09-06T18:00:00Z'),
+      endMs: Date.parse('2026-09-07T01:00:00Z'),
+      recordingMethod: 'AUTOMATIC' as const,
+    };
+    const longerPhoneSession = {
+      sourceId: PHONE,
+      startMs: Date.parse('2026-09-06T17:00:00Z'),
+      endMs: Date.parse('2026-09-07T02:00:00Z'),
+      recordingMethod: 'AUTOMATIC' as const,
+    };
+
+    // HR exists for the whole night, but only ever from the watch.
+    const hr = [];
+    for (let t = watchSession.startMs; t < watchSession.endMs; t += 10 * 60_000) {
+      hr.push({ sourceId: WATCH, atMs: t, bpm: 54, recordingMethod: 'AUTOMATIC' as const });
+    }
+
+    const pick = selectMainSession(
+      [longerPhoneSession, watchSession],
+      '2026-09-07',
+      330,
+      'android',
+      hr,
+    );
+    expect(pick?.session.sourceId).toBe(WATCH);
+    expect(pick?.session.startMs).toBe(watchSession.startMs);
+  });
+
+  it('the phone session alone, with only the watch HR present, is not selectable', () => {
+    const WATCH = 'com.garmin.android.apps.connectmobile';
+    const PHONE = 'com.sec.android.app.shealth';
+    const phoneSession = {
+      sourceId: PHONE,
+      startMs: Date.parse('2026-09-06T17:00:00Z'),
+      endMs: Date.parse('2026-09-07T02:00:00Z'),
+      recordingMethod: 'AUTOMATIC' as const,
+    };
+    const hr = [
+      {
+        sourceId: WATCH,
+        atMs: Date.parse('2026-09-06T20:00:00Z'),
+        bpm: 54,
+        recordingMethod: 'AUTOMATIC' as const,
+      },
+    ];
+    expect(selectMainSession([phoneSession], '2026-09-07', 330, 'android', hr)).toBeNull();
   });
 });

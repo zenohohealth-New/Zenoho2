@@ -44,6 +44,48 @@ export function toServerRow(
   };
 }
 
+/** Exactly the columns a commitment row may carry to the server (spec §8). */
+export interface ServerCommitmentRow {
+  readonly user_id: string;
+  readonly bed_target_min: number;
+  readonly wake_target_min: number;
+  readonly tolerance_min: number;
+}
+
+/**
+ * The commitment equivalent of `toServerRow`, and it exists for the same reason.
+ *
+ * DEF-005-02: the commitments insert was built inline at the call site from a
+ * `StoredCommitment`, so it was the one write path in the app that was not a
+ * whitelist. Nothing raw lives on a commitment today — but "today" is the whole
+ * problem. `StoredCommitment` is a local type that will grow: a device id, a
+ * last-synced timestamp, a nickname. Any of those would have been picked up by a
+ * spread or an absent-minded `...local` and posted, and the guard would not have
+ * stopped a plain integer or a short string.
+ *
+ * Constructive, like `toServerRow`: named fields copied one at a time, so a field
+ * added to the source type cannot arrive here by accident.
+ */
+export function toServerCommitment(
+  local: { bedTargetMin: number; wakeTargetMin: number; toleranceMin: number },
+  userId: string,
+): ServerCommitmentRow {
+  return {
+    user_id: userId,
+    bed_target_min: local.bedTargetMin,
+    wake_target_min: local.wakeTargetMin,
+    tolerance_min: local.toleranceMin,
+  };
+}
+
+/** The column names a commitment row is allowed to have. */
+export const SERVER_COMMITMENT_COLUMNS: readonly string[] = [
+  'user_id',
+  'bed_target_min',
+  'wake_target_min',
+  'tolerance_min',
+];
+
 /** The column names a server row is allowed to have. Used by the export check. */
 export const SERVER_ROW_COLUMNS: readonly string[] = [
   'commitment_id',

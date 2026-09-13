@@ -7,8 +7,13 @@
  * 18:00 on N-1 to 12:00 on N.
  */
 import { localMidnightMs, MIN_MS } from './time';
-import type { SleepSession } from './types';
-import { classifySource, type Platform, type SourceVerdict } from '../eligibility';
+import type { HrSample, SleepSession } from './types';
+import {
+  classifySource,
+  hasOwnSourceHr,
+  type Platform,
+  type SourceVerdict,
+} from '../eligibility';
 
 export interface MainSessionPick {
   readonly session: SleepSession;
@@ -32,15 +37,42 @@ export function sessionWindow(nightDate: string, tzOffsetMin: number): SessionWi
 }
 
 /**
+ * Sessions in the window whose *source* is eligible, before heart rate is
+ * considered. Exported so the caller can tell "no sleep at all" (NO_SOURCE) from
+ * "sleep arrived but brought no heart rate of its own" (NO_HR, D-045) without
+ * recomputing the window.
+ */
+export function sourceEligibleInWindow(
+  sessions: readonly SleepSession[],
+  nightDate: string,
+  tzOffsetMin: number,
+  platform: Platform,
+): readonly SleepSession[] {
+  const { fromMs, toMs } = sessionWindow(nightDate, tzOffsetMin);
+  return sessions.filter(
+    (s) =>
+      s.startMs >= fromMs &&
+      s.startMs < toMs &&
+      s.endMs > s.startMs &&
+      classifySource(s.sourceId, s.recordingMethod, platform).sourceClass === 'ELIGIBLE',
+  );
+}
+
+/**
  * Pick the longest eligible session whose *start* falls in the window.
+ *
  * Ineligible sources are filtered out before "longest" is applied, so a long
- * manual entry cannot shadow a real, shorter wearable session.
+ * manual entry cannot shadow a real, shorter wearable session — and, since
+ * D-045, neither can a long phone-inferred session that has no heart rate of its
+ * own. `hr` is required rather than optional precisely so that adding a call
+ * site cannot quietly skip the check.
  */
 export function selectMainSession(
   sessions: readonly SleepSession[],
   nightDate: string,
   tzOffsetMin: number,
   platform: Platform,
+  hr: readonly HrSample[],
 ): MainSessionPick | null {
   const { fromMs, toMs } = sessionWindow(nightDate, tzOffsetMin);
 
@@ -53,6 +85,8 @@ export function selectMainSession(
 
     const verdict = classifySource(s.sourceId, s.recordingMethod, platform);
     if (verdict.sourceClass !== 'ELIGIBLE') continue;
+    // D-045: the session's own source must supply the heart rate.
+    if (!hasOwnSourceHr(s, hr, platform)) continue;
 
     const duration = s.endMs - s.startMs;
     // Ties break towards the earlier start so the pick is deterministic.

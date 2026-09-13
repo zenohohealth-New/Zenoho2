@@ -8,7 +8,11 @@
 import type { DerivedNight } from '../derive/types';
 import type { StoredCommitment } from '../storage/commitmentStore';
 import { KEY_REMOTE_COMMITMENT_ID, kvGetNumber, kvSetNumber } from '../storage/kv';
-import { toServerRow, type ServerDailyStateRow } from '../net/payload';
+import {
+  toServerCommitment,
+  toServerRow,
+  type ServerDailyStateRow,
+} from '../net/payload';
 import { getSupabase } from './client';
 import { getDeviceClockOffsetMin } from './clockSkew';
 import { clearQueue, enqueue, markFailed, markSent, pending, pendingCount } from './syncQueue';
@@ -42,14 +46,11 @@ export async function ensureRemoteCommitment(
     .upsert({ id: userId, platform: 'android' }, { onConflict: 'id' });
   if (userErr) throw new Error(userErr.message);
 
+  // DEF-005-02: through the whitelist, not built inline. This was the last write
+  // path in the app that constructed its own body.
   const { data, error } = await supabase
     .from('commitments')
-    .insert({
-      user_id: userId,
-      bed_target_min: local.bedTargetMin,
-      wake_target_min: local.wakeTargetMin,
-      tolerance_min: local.toleranceMin,
-    })
+    .insert(toServerCommitment(local, userId))
     .select('id')
     .single();
   if (error) throw new Error(error.message);

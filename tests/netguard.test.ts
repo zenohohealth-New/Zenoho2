@@ -8,7 +8,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { deriveDailyState } from '../app/src/derive';
-import { SERVER_ROW_COLUMNS, toServerRow } from '../app/src/net/payload';
+import { SERVER_COMMITMENT_COLUMNS, SERVER_ROW_COLUMNS, toServerCommitment, toServerRow } from '../app/src/net/payload';
 import {
   __resetAllowedOriginForTests,
   assertAllowedHost,
@@ -214,5 +214,118 @@ describe('guardedFetch end to end', () => {
         body: 'plain text with 2026-09-06T17:40:00Z inside',
       }),
     ).rejects.toBeInstanceOf(RawHealthLeakError);
+  });
+
+  // DEF-005-03. The guard knew milliseconds only, so the most ordinary way there
+  // is to shrink a timestamp walked through the check meant to stop timestamps.
+  describe('epoch seconds (DEF-005-03)', () => {
+    it('refuses a 10-digit epoch-seconds integer', async () => {
+      await expect(
+        guardedFetch(`${PROJECT}/rest/v1/daily_states`, {
+          method: 'POST',
+          body: JSON.stringify({ state: 'KEPT', at: Math.floor(Date.parse('2026-09-07T01:05:00Z') / 1000) }),
+        }),
+      ).rejects.toBeInstanceOf(RawHealthLeakError);
+      expect(sent).toHaveLength(0);
+    });
+
+    it('refuses it nested, and inside an array', async () => {
+      await expect(
+        guardedFetch(`${PROJECT}/rest/v1/x`, {
+          method: 'POST',
+          body: JSON.stringify({ a: { b: [{ c: 1757206800 }] } }),
+        }),
+      ).rejects.toBeInstanceOf(RawHealthLeakError);
+    });
+
+    // This one found a second hole. `guardedFetch` scans the raw text when the
+    // body is not JSON, and that path only ever applied the ISO pattern - so an
+    // epoch integer in a non-JSON body was never checked, in EITHER unit.
+    it('refuses epoch seconds as text in a non-JSON body', async () => {
+      await expect(
+        guardedFetch(`${PROJECT}/rest/v1/x`, {
+          method: 'POST',
+          body: 'ts=1757206800',
+        }),
+      ).rejects.toBeInstanceOf(RawHealthLeakError);
+    });
+
+    it('refuses epoch milliseconds as text too, which it also used to miss', async () => {
+      await expect(
+        guardedFetch(`${PROJECT}/rest/v1/x`, {
+          method: 'POST',
+          body: 'startMs was 1757206800000',
+        }),
+      ).rejects.toBeInstanceOf(RawHealthLeakError);
+    });
+
+    it('still allows the small integers a §7 row actually carries', async () => {
+      // deviation_min, device_clock_offset_min, commitment_id, tolerance.
+      await expect(
+        guardedFetch(`${PROJECT}/rest/v1/daily_states`, {
+          method: 'POST',
+          body: JSON.stringify({
+            commitment_id: 2,
+            state: 'KEPT',
+            deviation_min: 10,
+            device_clock_offset_min: -3,
+            wear_presence: true,
+            frozen: false,
+          }),
+        }),
+      ).resolves.toBeDefined();
+      expect(sent).toHaveLength(1);
+    });
+  });
+
+  // DEF-005-02. The commitments insert was the one write path built inline
+  // rather than through a whitelist.
+  describe('commitment payload whitelist (DEF-005-02)', () => {
+    it('constructs exactly the four permitted columns', () => {
+      const row = toServerCommitment(
+        { bedTargetMin: 1380, wakeTargetMin: 420, toleranceMin: 30 },
+        'user-uuid',
+      );
+      expect(Object.keys(row).sort()).toEqual([...SERVER_COMMITMENT_COLUMNS].sort());
+      expect(row).toEqual({
+        user_id: 'user-uuid',
+        bed_target_min: 1380,
+        wake_target_min: 420,
+        tolerance_min: 30,
+      });
+    });
+
+    it('drops anything the local type has grown that the server may not hold', () => {
+      // The failure this prevents: StoredCommitment gains a field, a spread
+      // carries it to the server, and the guard sees nothing wrong because a
+      // device id is just a string.
+      const row = toServerCommitment(
+        {
+          bedTargetMin: 1380,
+          wakeTargetMin: 420,
+          toleranceMin: 30,
+          id: 7,
+          createdAtMs: 1757206800000,
+          deviceId: 'pixel-in-the-bedroom',
+        } as never,
+        'user-uuid',
+      );
+      expect(Object.keys(row)).toHaveLength(4);
+      expect(JSON.stringify(row)).not.toContain('pixel-in-the-bedroom');
+      expect(JSON.stringify(row)).not.toContain('1757206800000');
+    });
+
+    it('the constructed row survives the guard', async () => {
+      const row = toServerCommitment(
+        { bedTargetMin: 1380, wakeTargetMin: 420, toleranceMin: 30 },
+        'user-uuid',
+      );
+      await expect(
+        guardedFetch(`${PROJECT}/rest/v1/commitments`, {
+          method: 'POST',
+          body: JSON.stringify(row),
+        }),
+      ).resolves.toBeDefined();
+    });
   });
 });

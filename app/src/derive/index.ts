@@ -10,7 +10,7 @@ import {
   MIN_MS,
   roundTo5,
 } from './time';
-import { selectMainSession } from './session';
+import { selectMainSession, sourceEligibleInWindow } from './session';
 import { wearPresence } from './wear';
 import { rhrCoherence } from './rhr';
 import { classifySource, type Platform } from '../eligibility';
@@ -104,21 +104,29 @@ export function deriveDailyState(
     return noDataResult(nightDate, 'TRAVEL', 'TRAVEL', null, computedAt, 0);
   }
 
-  const pick = selectMainSession(sessions, nightDate, tzOffsetMin, platform);
+  const pick = selectMainSession(sessions, nightDate, tzOffsetMin, platform, hr);
   if (pick === null) {
-    return noDataResult(nightDate, 'NO_SOURCE', 'NO_DATA', null, computedAt, 0);
+    // D-045: distinguish "nothing slept here" from "something recorded sleep but
+    // brought no heart rate of its own". The second is the phone-inferred case,
+    // and calling it NO_SOURCE hid it — the member would be told no wearable was
+    // seen when one had written a session all night.
+    const sourceEligible = sourceEligibleInWindow(sessions, nightDate, tzOffsetMin, platform);
+    const reason: IntegrityFlag = sourceEligible.length > 0 ? 'NO_HR' : 'NO_SOURCE';
+    const sourceId = sourceEligible.length > 0 ? sourceEligible[0].sourceId : null;
+    return noDataResult(nightDate, reason, 'NO_DATA', sourceId, computedAt, 0);
   }
 
   // `verdict` is no longer destructured: with the brand lists gone (D-042) the
   // only thing it could say about an accepted session is that it was accepted.
   const { session } = pick;
 
-  // D-019: only HR from an eligible source may prove wear time, so a manually
-  // entered heart rate cannot satisfy L2. Under D-042 that is the whole test —
-  // every automatically recorded source counts, whatever wrote it.
+  // D-019 + D-045: wear time may only be proved by heart rate from **this
+  // session's own source**. Accepting any eligible source let a second device's
+  // HR vouch for a session it had nothing to do with.
   const acceptHrSource = (sample: HrSample) =>
+    sample.sourceId === session.sourceId &&
     classifySource(sample.sourceId, sample.recordingMethod, platform).sourceClass ===
-    'ELIGIBLE';
+      'ELIGIBLE';
 
   const wear = wearPresence(hr, session.startMs, session.endMs, acceptHrSource);
   if (!wear.present) {

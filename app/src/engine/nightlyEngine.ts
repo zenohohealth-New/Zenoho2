@@ -71,7 +71,7 @@ export async function deriveAndStoreNight(
     o.tzOffsetMin,
   );
 
-  const main = selectMainSession(sessions, o.nightDate, o.tzOffsetMin, o.store.platform);
+  const main = selectMainSession(sessions, o.nightDate, o.tzOffsetMin, o.store.platform, hr);
   const rhr = await loadRhrHistory(
     o.store,
     o.rhrLocalStore,

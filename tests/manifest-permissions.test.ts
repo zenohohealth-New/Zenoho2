@@ -120,7 +120,10 @@ describe('Layer 1 — the code requires nothing the manifest config omits', () =
   });
 
   it('the requirement list is non-empty, so a passing run means something', () => {
-    expect(REQUIRED_ANDROID_PERMISSIONS.length).toBeGreaterThanOrEqual(6);
+    // Five since DEF-005-04 removed READ_HEALTH_DATA_IN_BACKGROUND, which was
+    // requested and never used. The floor exists so that emptying the list
+    // cannot make this suite pass vacuously; it is not a target to hold at.
+    expect(REQUIRED_ANDROID_PERMISSIONS.length).toBeGreaterThanOrEqual(5);
     expect(recordTypesRequestedInCode().length).toBeGreaterThanOrEqual(3);
   });
 });

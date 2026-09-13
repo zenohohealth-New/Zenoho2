@@ -8,7 +8,6 @@
  * Read-only: this file never imports or calls any Health Connect write API.
  */
 import {
-  getGrantedPermissions,
   getSdkStatus,
   initialize,
   readRecords,
@@ -32,9 +31,15 @@ const READ_PERMISSIONS = [
   { accessType: 'read', recordType: 'RestingHeartRate' },
 ] as const;
 
-/** Spec §12 / D-011: background + history are requested alongside the reads. */
+/**
+ * History is requested alongside the reads: without it Health Connect serves
+ * only the last 30 days, and the L3 baseline wants 45 (D-011, D-017).
+ *
+ * Background access is NOT requested (DEF-005-04). Nothing in this app derives
+ * in the background; D-011's design is a morning notification that brings the
+ * app forward. See androidPermissions.ts.
+ */
 const SPECIAL_PERMISSIONS = [
-  { accessType: 'read', recordType: 'BackgroundAccessPermission' },
   { accessType: 'read', recordType: 'ReadHealthDataHistory' },
 ] as const;
 
@@ -65,18 +70,18 @@ export class HealthConnectStore implements HealthStore {
       granted.some(
         (p) => (p as { recordType?: string }).recordType === recordType,
       );
-    // Sleep and HR are mandatory. Resting HR, background and history are not:
-    // without RHR the L3 check falls back (D-017), which is not a reason to fail.
+    // Sleep and HR are mandatory. Resting HR and history are not: without RHR
+    // the L3 check falls back (D-017), which is not a reason to fail.
     return has('SleepSession') && has('HeartRate') ? 'GRANTED' : 'DENIED';
   }
 
   async hasBackgroundAccess(): Promise<boolean> {
-    if (!(await this.ensureInit())) return false;
-    const granted = await getGrantedPermissions();
-    return granted.some(
-      (p) =>
-        (p as { recordType?: string }).recordType === 'BackgroundAccessPermission',
-    );
+    // Always false on Android since DEF-005-04: the permission is no longer
+    // requested, so it cannot be granted. Kept rather than deleted because the
+    // interface is shared with iOS, where background *delivery* is a different
+    // mechanism and still meaningful. The harness row reads it so the absence is
+    // visible on device rather than inferred from this file.
+    return false;
   }
 
   async readNight(nightDate: string, tzOffsetMin: number): Promise<NightReadResult> {

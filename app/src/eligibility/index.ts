@@ -18,8 +18,9 @@
  *    "asleep at 23:00" is not evidence, whichever app they typed it into.
  *  - **The phone exclusion** — sleep a phone inferred by itself is still
  *    ineligible (D-003's substantive rule, which D-042 does not lift). This is
- *    now enforced by requiring heart rate across the session from a source that
- *    is itself eligible, rather than by naming apps. See `hasOwnSourceHr`.
+ *    now enforced by requiring heart rate across the session **from the
+ *    session's own source** (D-045), rather than by naming apps. See
+ *    `hasOwnSourceHr`.
  *
  * The phone exclusion is deliberately a property of the data, not a claim about
  * identity, and that is the stronger test: a phone has no sensor that can
@@ -74,20 +75,29 @@ export interface EligibilityResult {
 export const ELIGIBILITY_LOOKBACK_DAYS = 7;
 
 /**
- * True when this session carries heart rate from a source that is itself
- * eligible (D-019: a manually entered HR must not be able to vouch for a night).
+ * True when this session carries heart rate **from its own source**, and that
+ * source is itself eligible (D-019: a hand-typed HR must not vouch for a night).
+ *
+ * **D-045: the source ids must match.** Requiring merely "some eligible HR
+ * overlaps this session" was DEF-005-01, and it defeated the phone exclusion
+ * entirely: a phone app inferring sleep from screen-off time, on a night when a
+ * watch was also worn and writing HR, would borrow the watch's heart rate as its
+ * own evidence. The two records have nothing to do with each other — they only
+ * share a clock. Worse, that session could then win `selectMainSession` on
+ * length and become the night, with integrity OK.
  *
  * This is the phone exclusion. It is a weaker claim than "this came from a
- * watch" and an honest one: it says the session is accompanied by a signal a
- * phone cannot produce on its own.
+ * watch" and an honest one: it says the session is accompanied, by the app that
+ * recorded it, by a signal a phone cannot produce on its own.
  */
-function hasOwnSourceHr(
+export function hasOwnSourceHr(
   session: SleepSession,
   hr: readonly HrSample[],
   platform: Platform,
 ): boolean {
   return hr.some(
     (h) =>
+      h.sourceId === session.sourceId &&
       h.atMs >= session.startMs &&
       h.atMs < session.endMs &&
       classifySource(h.sourceId, h.recordingMethod, platform).sourceClass === 'ELIGIBLE',

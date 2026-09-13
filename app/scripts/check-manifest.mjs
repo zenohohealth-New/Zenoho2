@@ -22,7 +22,6 @@ const REQUIRED = [
   'android.permission.health.READ_SLEEP',
   'android.permission.health.READ_HEART_RATE',
   'android.permission.health.READ_RESTING_HEART_RATE',
-  'android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND',
   'android.permission.health.READ_HEALTH_DATA_HISTORY',
   'android.permission.POST_NOTIFICATIONS',
 ];

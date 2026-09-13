@@ -22,8 +22,22 @@ export const HEALTH_RECORD_PERMISSIONS: Readonly<Record<string, string>> = {
   SleepSession: 'android.permission.health.READ_SLEEP',
   HeartRate: 'android.permission.health.READ_HEART_RATE',
   RestingHeartRate: 'android.permission.health.READ_RESTING_HEART_RATE',
-  BackgroundAccessPermission: 'android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND',
+  // READ_HEALTH_DATA_HISTORY stays: Health Connect serves only the last 30 days
+  // without it, and `readRhrHistory` asks for RHR_HISTORY_DAYS = 45 to build the
+  // L3 baseline (D-011, D-017). Remove it and the baseline silently truncates.
   ReadHealthDataHistory: 'android.permission.health.READ_HEALTH_DATA_HISTORY',
+  // READ_HEALTH_DATA_IN_BACKGROUND is deliberately ABSENT (DEF-005-04). It was
+  // requested from the user and then never used: there is no background derive,
+  // no headless task and no scheduler - a test in offline-sync.test.ts asserts
+  // BackgroundFetch and TaskManager are not even dependencies. D-011 settled the
+  // design the other way: a morning notification brings the app to the
+  // foreground and derivation happens there.
+  //
+  // Asking for a permission you do not exercise is not harmless. It is one more
+  // item on a consent screen the member has to accept, one more line in the Play
+  // data-safety declaration to justify, and it quietly contradicts what Settings
+  // tells them the app does. If a background derive is ever built, add it back
+  // in the same commit as the code that uses it.
 };
 
 /** Permissions required by a module the app imports, rather than by a record type. */
