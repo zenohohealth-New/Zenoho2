@@ -17,14 +17,36 @@ const APP_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const MANIFEST = join(APP_ROOT, 'android', 'app', 'src', 'main', 'AndroidManifest.xml');
 const HAD_ANDROID_DIR = existsSync(join(APP_ROOT, 'android'));
 
-/** Mirrors src/platform/androidPermissions.ts. Kept in sync by the vitest suite. */
-const REQUIRED = [
-  'android.permission.health.READ_SLEEP',
-  'android.permission.health.READ_HEART_RATE',
-  'android.permission.health.READ_RESTING_HEART_RATE',
-  'android.permission.health.READ_HEALTH_DATA_HISTORY',
-  'android.permission.POST_NOTIFICATIONS',
-];
+/**
+ * Read straight out of src/platform/androidPermissions.ts, so the repo holds two
+ * copies of this list — the TypeScript source of truth and app.json — instead of
+ * three.
+ *
+ * The third copy used to live here, hand-maintained, under a comment claiming it
+ * was "kept in sync by the vitest suite". That claim was false: the suite
+ * imports the TypeScript and never opened this file. The drift was real, and it
+ * surfaced as this script failing at run time — later and noisier than needed.
+ *
+ * Parsed rather than imported because this is a .mjs script and the source is
+ * .ts, with no build step between them. Comments are stripped first: the source
+ * names removed permissions in prose (READ_HEALTH_DATA_IN_BACKGROUND, and why it
+ * went), and a regex that read comments would resurrect exactly what was deleted.
+ */
+function requiredPermissions() {
+  const src = readFileSync(join(APP_ROOT, 'src', 'platform', 'androidPermissions.ts'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
+  const unique = [
+    ...new Set([...src.matchAll(/'(android\.permission\.[A-Za-z0-9_.]+)'/g)].map((m) => m[1])),
+  ];
+  if (unique.length === 0) {
+    console.error('\n\u2716 could not parse any permission from androidPermissions.ts\n');
+    process.exit(1);
+  }
+  return unique;
+}
+
+const REQUIRED = requiredPermissions();
 
 const FORBIDDEN = [/^android\.permission\.health\.WRITE_/];
 

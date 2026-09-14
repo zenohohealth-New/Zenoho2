@@ -39,6 +39,7 @@ Input: HealthKit / Health Connect reads for the last 48 h (sleep sessions + hear
 
 ```
 if no main sleep session from eligible source         → NO_DATA, integrity = NO_SOURCE
+elif the session's OWN source sent no heart rate        → NO_DATA, integrity = NO_HR     # D-045
 elif wear presence < 70%                               → NO_DATA, integrity = NO_WEAR
 else:
   bed_dev  = sleep_start − bed_target   (minutes, signed)

@@ -119,6 +119,26 @@ describe('Layer 1 — the code requires nothing the manifest config omits', () =
     expect(offenders).toEqual([]);
   });
 
+  it('check-manifest.mjs derives its list instead of holding a third copy', () => {
+    // The cross-check is kept, but it now checks the PARSER rather than a
+    // hand-copied array: if androidPermissions.ts is ever reshaped so the regex
+    // stops matching, that fails loudly here instead of quietly enforcing a
+    // shorter list.
+    const script = readFileSync(
+      new URL('../app/scripts/check-manifest.mjs', import.meta.url).pathname.replace(
+        /^\/([A-Za-z]:)/,
+        '$1',
+      ),
+      'utf8',
+    );
+    expect(script).toMatch(/androidPermissions\.ts/);
+
+    const literals = [...script.matchAll(/'(android\.permission\.[A-Za-z0-9_.]+)'/g)].map(
+      (m) => m[1],
+    );
+    expect(literals).toEqual([]);
+  });
+
   it('the requirement list is non-empty, so a passing run means something', () => {
     // Five since DEF-005-04 removed READ_HEALTH_DATA_IN_BACKGROUND, which was
     // requested and never used. The floor exists so that emptying the list
