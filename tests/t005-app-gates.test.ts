@@ -53,6 +53,28 @@ describe('AC-5.5 — a revoked Health Connect permission is never silent', () =>
   });
 });
 
+describe('DEF-005-05 — skipped nights are derived, not left absent', () => {
+  it('the tap handler catches up the whole window, not just last night', () => {
+    expect(APP).toMatch(/catchUpMissingNights\(base\)/);
+    // The old first-run-only backfill must be gone: it was the branch that made
+    // "derive everything" conditional on the store being empty.
+    expect(APP).not.toMatch(/countNights\(c\.id\)\) === 0/);
+    expect(APP).not.toMatch(/await backfill\(/);
+  });
+
+  it('recovered nights are queued for upload, not only last night', () => {
+    // Otherwise the server keeps exactly the hole the local history just lost.
+    expect(APP).toMatch(/for \(const d of recovered\) await queueNight\(d\.stored\)/);
+  });
+
+  it('a warm resume derives, not just drains the queue', () => {
+    // Tapping the morning reminder on an app still in memory reaches the
+    // AppState listener, not the boot effect.
+    const listener = /AppState\.addEventListener\('change'[\s\S]*?\}\);/.exec(APP)?.[0] ?? '';
+    expect(listener).toMatch(/sync\(commitment\)/);
+  });
+});
+
 describe('AC-5.7 — one vocabulary for a state, and a usable No-data hint', () => {
   it('the status line prints the label, never the raw enum', () => {
     expect(APP).toMatch(/STATE_LABEL\[outcome\.stored\.state\]/);

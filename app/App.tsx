@@ -21,9 +21,8 @@ import {
   saveCommitment,
   type StoredCommitment,
 } from './src/storage/commitmentStore';
-import { countNights } from './src/storage/dailyStateStore';
 import {
-  backfill,
+  catchUpMissingNights,
   deriveAndStoreNight,
   summariseHistory,
 } from './src/engine/nightlyEngine';
@@ -157,14 +156,26 @@ export default function App() {
           nowMs,
         };
 
-        if ((await countNights(c.id)) === 0) {
-          await backfill(base);
-        }
+        // DEF-005-05: derive every night in the window that has no local row,
+        // oldest first, not just last night. A member who does not open the app
+        // for four days used to come back to four ABSENT rows — not four
+        // NO_DATA rows — while Health Connect held the sleep the whole time.
+        // This also replaces the old first-run backfill: on a fresh install
+        // every night is missing, so the same loop fills them and there is no
+        // "is this the first run" branch left to get wrong.
+        const caught = await catchUpMissingNights(base);
 
         const outcome = await deriveAndStoreNight({
           ...base,
           nightDate: localDateKey(nowMs, tzOffsetMin),
         });
+
+        // Nights recovered by the catch-up are worth saying out loud: the
+        // member did not ask for them and would otherwise not know they had been
+        // missing at all.
+        const recovered = caught.derived.filter(
+          (d) => d.stored.nightDate !== localDateKey(nowMs, tzOffsetMin),
+        );
 
         if (outcome === null) {
           setError("Couldn't read sleep from Health Connect, so nothing was recorded.");
@@ -177,13 +188,26 @@ export default function App() {
           if (outcome.stored.state === 'NO_DATA') note += ` ${NO_DATA_HINT}`;
         }
 
+        if (recovered.length > 0) {
+          // The timing is on screen deliberately: the catch-up is the one loop
+          // whose cost grows with how long the member stayed away, and nobody
+          // can tell from a laptop how long thirty Health Connect reads take on
+          // a real phone. This is how that number gets measured.
+          note += ` Also caught up ${recovered.length} night${
+            recovered.length === 1 ? '' : 's'
+          } you missed (${(caught.elapsedMs / 1000).toFixed(1)}s).`;
+        }
+
         await refreshSummary(c.id);
 
         // Queue unconditionally, before anything that could need a network. This
         // is the DEF-003-01 fix: queueing used to sit behind `auth.getUser()`,
         // a round trip, so a night derived offline was never queued at all.
-        if (outcome !== null && backendConfigured()) {
-          await queueNight(outcome.stored);
+        if (backendConfigured()) {
+          // Every recovered night is queued too, not only last night, or the
+          // server keeps the same hole the local history just lost.
+          for (const d of recovered) await queueNight(d.stored);
+          if (outcome !== null) await queueNight(outcome.stored);
           const r = await pushPending(c);
           if (r.remaining > 0) {
             note += ` Saved on this phone; ${r.remaining} night${
@@ -285,10 +309,18 @@ export default function App() {
   useEffect(() => {
     const sub = AppState.addEventListener('change', (next) => {
       if (next !== 'active') return;
-      void pushPending(commitment);
+      // DEF-005-05: a warm resume is an "open" too. The boot effect derives on a
+      // cold start, but tapping the morning reminder on an app that is still in
+      // memory used to reach only the upload drain — so the reminder that exists
+      // to make you check last night did not, itself, derive last night.
+      //
+      // The catch-up is cheap once there is nothing to catch up: one read of the
+      // stored night dates, then a set lookup per night in the window.
+      if (commitment !== null) void sync(commitment);
+      else void pushPending(null);
     });
     return () => sub.remove();
-  }, [pushPending, commitment]);
+  }, [pushPending, sync, commitment]);
 
   // Record when the trigger actually fires. Both listeners matter: `received`
   // covers a foreground delivery, `response` covers the user tapping it.

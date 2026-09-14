@@ -34,7 +34,7 @@ export interface DeriveNightOptions {
   readonly store: HealthStore;
   readonly rhrLocalStore: RhrHistoryStore;
   readonly commitmentId: number;
-  readonly commitment: Commitment;
+  readonly commitment: Commitment & { readonly createdAt?: number };
   readonly nightDate: string;
   readonly tzOffsetMin: number;
   readonly prevTzOffsetMin?: number;
@@ -168,6 +168,89 @@ export async function backfill(
 
   const purged = await purgeOldStates(o.nowMs);
   return { attempted: nights, stored, skipped, distribution, purged };
+}
+
+export interface CatchUpResult {
+  /** Nights in the window that had no local row and were derived now. */
+  readonly derived: readonly DeriveNightOutcome[];
+  /** Nights considered, after the promise-start cut. */
+  readonly considered: number;
+  /** Already had a row; not re-derived. */
+  readonly alreadyStored: number;
+  /** Missing, attempted, and still unstorable — a failed read, not a quiet night. */
+  readonly unreadable: number;
+  readonly purged: number;
+  readonly elapsedMs: number;
+}
+
+/**
+ * Derive every night in the 30-night window that has no local row, oldest first.
+ *
+ * DEF-005-05. Derivation only ever targeted "last night", so a member who did not
+ * open the app for four days came back to a history with a hole in it — not four
+ * NO_DATA rows, four *absent* rows, while Health Connect held the sleep all
+ * along. The daily reminder fired and derived nothing, because nothing but an
+ * open app derives.
+ *
+ * The hole is worse than a cosmetic gap. An absent row is indistinguishable from
+ * a night that never existed, so skipping the app quietly erases the evidence —
+ * which is the opposite of what an accountability product is for. T-004B carries
+ * the matching server-side requirement: a witness must see "not reported", never
+ * a missing row.
+ *
+ * Oldest first, because `applyRevision` compares each night against what is
+ * already stored and the §5 freeze rules read naturally forward in time.
+ *
+ * **Nights before the promise start are excluded.** A commitment made on the 10th
+ * says nothing about the 8th, and deriving backwards past it would invent a
+ * verdict against a promise that did not exist. `createdAt` is the cut.
+ *
+ * This subsumes the old first-run backfill: on a fresh install every night in
+ * the window is missing, so the same loop fills them. There is no longer a
+ * separate "is this the first run" branch to get wrong.
+ */
+export async function catchUpMissingNights(
+  o: Omit<DeriveNightOptions, 'nightDate' | 'prevTzOffsetMin'>,
+  nights: number = BACKFILL_NIGHTS,
+): Promise<CatchUpResult> {
+  const startedMs = Date.now();
+
+  const existing = new Set((await loadAllNights(o.commitmentId)).map((n) => n.nightDate));
+  const promiseStart = localDateKey(o.commitment.createdAt ?? 0, o.tzOffsetMin);
+
+  const derived: DeriveNightOutcome[] = [];
+  let considered = 0;
+  let alreadyStored = 0;
+  let unreadable = 0;
+
+  // i = nights .. 1, so oldest first; i = 0 (tonight) is not a night yet.
+  for (let i = nights; i >= 1; i -= 1) {
+    const nightDate = localDateKey(o.nowMs - i * 86_400_000, o.tzOffsetMin);
+    if (nightDate < promiseStart) continue;
+    considered += 1;
+    if (existing.has(nightDate)) {
+      alreadyStored += 1;
+      continue;
+    }
+    const outcome = await deriveAndStoreNight({ ...o, nightDate });
+    if (outcome === null) {
+      // A failed sleep read with nothing already stored. Deliberately not
+      // written as NO_DATA: a read that failed is not a night that was missed.
+      unreadable += 1;
+      continue;
+    }
+    derived.push(outcome);
+  }
+
+  const purged = await purgeOldStates(o.nowMs);
+  return {
+    derived,
+    considered,
+    alreadyStored,
+    unreadable,
+    purged,
+    elapsedMs: Date.now() - startedMs,
+  };
 }
 
 export interface HistorySummary {

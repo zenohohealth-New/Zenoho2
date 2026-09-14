@@ -44,7 +44,7 @@ vi.mock('../app/src/storage/dailyStateStore', () => ({
     [...rows.keys()].filter((k) => k.startsWith(`${c}:`)).length,
 }));
 
-const { backfill, deriveAndStoreNight, summariseHistory } = await import(
+const { catchUpMissingNights, deriveAndStoreNight, summariseHistory } = await import(
   '../app/src/engine/nightlyEngine'
 );
 const { InMemoryRhrHistoryStore } = await import('../app/src/storage/rhrStore');
@@ -165,12 +165,13 @@ describe('deriveAndStoreNight', () => {
 describe('backfill', () => {
   it('AC-2.2: stores a row per night, oldest first', async () => {
     const withData = ['2026-09-05', '2026-09-06', '2026-09-07'];
-    const r = await backfill(baseOpts(storeFor(withData)), 7);
+    const r = await catchUpMissingNights(baseOpts(storeFor(withData)), 7);
 
-    expect(r.attempted).toBe(7);
-    expect(r.stored).toBe(7);
-    expect(r.distribution.KEPT).toBeGreaterThanOrEqual(2);
-    expect(r.distribution.NO_DATA).toBeGreaterThanOrEqual(1);
+    expect(r.considered).toBe(7);
+    expect(r.derived).toHaveLength(7);
+    const states = [...rows.values()].map((n) => n.state);
+    expect(states.filter((x) => x === 'KEPT').length).toBeGreaterThanOrEqual(2);
+    expect(states.filter((x) => x === 'NO_DATA').length).toBeGreaterThanOrEqual(1);
     expect(rows.size).toBe(7);
   });
 
@@ -186,15 +187,15 @@ describe('backfill', () => {
       frozen: true,
       revisionCount: 0,
     });
-    const r = await backfill(baseOpts(storeFor([])), 3);
+    const r = await catchUpMissingNights(baseOpts(storeFor([])), 3);
     expect(r.purged).toBe(1);
     expect(rows.has('1:2026-01-01')).toBe(false);
   });
 
   it('skips nights it could not read rather than inventing NO_DATA', async () => {
-    const r = await backfill(baseOpts(storeFor([], { sleepReadFails: true })), 5);
-    expect(r.stored).toBe(0);
-    expect(r.skipped).toBe(5);
+    const r = await catchUpMissingNights(baseOpts(storeFor([], { sleepReadFails: true })), 5);
+    expect(r.derived).toHaveLength(0);
+    expect(r.unreadable).toBe(5);
     expect(rows.size).toBe(0);
   });
 });
@@ -202,7 +203,7 @@ describe('backfill', () => {
 describe('summariseHistory', () => {
   it('counts the streak and the lifetime kept-count', async () => {
     // backfill(5) from 2026-09-07 covers 09-02..09-06 — today is the caller's job.
-    await backfill(baseOpts(storeFor(['2026-09-05', '2026-09-06', '2026-09-07'])), 5);
+    await catchUpMissingNights(baseOpts(storeFor(['2026-09-05', '2026-09-06', '2026-09-07'])), 5);
     const s = await summariseHistory(1);
 
     expect(s.lifetimeKept).toBe(2);
@@ -212,7 +213,7 @@ describe('summariseHistory', () => {
   });
 
   it('backfill leaves today alone so the revision rules still apply to it', async () => {
-    await backfill(baseOpts(storeFor(['2026-09-07'])), 5);
+    await catchUpMissingNights(baseOpts(storeFor(['2026-09-07'])), 5);
     expect(rows.has('1:2026-09-07')).toBe(false);
 
     const today = await deriveAndStoreNight({
@@ -224,8 +225,83 @@ describe('summariseHistory', () => {
   });
 
   it('flags three consecutive no-data nights', async () => {
-    await backfill(baseOpts(storeFor([])), 3);
+    await catchUpMissingNights(baseOpts(storeFor([])), 3);
     const s = await summariseHistory(1);
     expect(s.promptDeviceCheck).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DEF-005-05 — the founder skipped four days and the app showed a hole, not
+// four NO_DATA rows. Derivation only ever targeted "last night".
+// ---------------------------------------------------------------------------
+describe('catchUpMissingNights (DEF-005-05)', () => {
+  // Nights 02..06 Sep all have real wearable sleep; NOW is the 07th.
+  const GAP = ['2026-09-02', '2026-09-03', '2026-09-04', '2026-09-05', '2026-09-06'];
+
+  it('a 5-night gap yields 5 rows, each with the correct verdict', async () => {
+    const r = await catchUpMissingNights(baseOpts(storeFor(GAP)), 5);
+
+    const filled = [...rows.values()].map((n) => n.nightDate).sort();
+    expect(filled).toEqual(GAP);
+    expect(r.derived).toHaveLength(5);
+
+    // The point of the defect: none of them may be NO_DATA merely for being
+    // late. Every one of these nights has a real session with its own HR.
+    for (const n of rows.values()) {
+      expect(n.state, `${n.nightDate} was derived as ${n.state}`).toBe('KEPT');
+      expect(n.integrity).toBe('OK');
+      expect(n.sourceId).toBe(GARMIN);
+    }
+  });
+
+  it('derives oldest first, so the §5 revision rules read forward in time', async () => {
+    const r = await catchUpMissingNights(baseOpts(storeFor(GAP)), 5);
+    expect(r.derived.map((d) => d.stored.nightDate)).toEqual(GAP);
+  });
+
+  it('leaves nights that already have a row alone', async () => {
+    await deriveAndStoreNight({ ...baseOpts(storeFor(GAP)), nightDate: '2026-09-04' });
+    const before = rows.get('1:2026-09-04');
+
+    const r = await catchUpMissingNights(baseOpts(storeFor(GAP)), 5);
+    expect(r.alreadyStored).toBeGreaterThanOrEqual(1);
+    expect(r.derived.map((d) => d.stored.nightDate)).not.toContain('2026-09-04');
+    expect(rows.get('1:2026-09-04')).toEqual(before);
+  });
+
+  it('excludes nights before the promise start date', async () => {
+    // Promise made on the 4th: the 2nd and 3rd are not its business.
+    const madeOn4th = {
+      ...baseOpts(storeFor(GAP)),
+      commitment: { ...COMMITMENT, createdAt: Date.parse('2026-09-04T06:00:00Z') },
+    };
+    await catchUpMissingNights(madeOn4th, 5);
+
+    const filled = [...rows.values()].map((n) => n.nightDate).sort();
+    expect(filled).toEqual(['2026-09-04', '2026-09-05', '2026-09-06']);
+  });
+
+  it('a missing night whose read fails is left absent, not invented as NO_DATA', async () => {
+    const r = await catchUpMissingNights(baseOpts(storeFor(GAP, { sleepReadFails: true })), 5);
+    expect(r.derived).toHaveLength(0);
+    expect(r.unreadable).toBeGreaterThan(0);
+    expect(rows.size).toBe(0);
+  });
+
+  it('a night with no sleep at all is recorded as NO_DATA, not skipped', async () => {
+    // The distinction that matters: "Health Connect returned nothing for that
+    // night" is a verdict. "The read failed" is not.
+    const r = await catchUpMissingNights(baseOpts(storeFor(['2026-09-06'])), 5);
+    const states = [...rows.values()].map((n) => n.state);
+    expect(r.derived).toHaveLength(5);
+    expect(states.filter((x) => x === 'NO_DATA')).toHaveLength(4);
+    expect(states.filter((x) => x === 'KEPT')).toHaveLength(1);
+  });
+
+  it('reports how long it took, so a catch-up can be timed on device', async () => {
+    const r = await catchUpMissingNights(baseOpts(storeFor(GAP)), 5);
+    expect(typeof r.elapsedMs).toBe('number');
+    expect(r.elapsedMs).toBeGreaterThanOrEqual(0);
   });
 });
