@@ -103,9 +103,10 @@ export function SignInScreen({ onSendCode, onVerify, onSkip }: Props) {
             <Text style={t.noticeTitle}>What leaves this phone</Text>
             <Text style={t.noticeBody}>
               Only whether each night was kept, missed, or had no data — plus how far
-              off you were, in minutes, which nobody else can see. Your sleep times
-              and your heart rate never leave this phone. Your watch sends them to
-              Health Connect; Zenoho reads them here and works out the answer here.
+              off you were, in minutes. That minutes figure is stored on your account
+              and only you can see it. Your sleep times and your heart rate never
+              leave this phone. Your watch sends them to Health Connect; Zenoho reads
+              them here and works out the answer here.
             </Text>
           </View>
 

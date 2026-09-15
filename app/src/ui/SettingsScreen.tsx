@@ -75,6 +75,11 @@ export function SettingsScreen(p: Props) {
           many minutes off you were.
         </Text>
         <Text style={[t.body, { marginTop: 10 }]}>
+          That last one — how many minutes off you were — is stored on your account.
+          Only you can see it. Nobody else, including anyone you share a pod with,
+          is shown that number.
+        </Text>
+        <Text style={[t.body, { marginTop: 10 }]}>
           What never goes: the times you fell asleep or woke, any heart-rate reading,
           and your resting heart rate. Those stay on this phone and are deleted after
           45 days.

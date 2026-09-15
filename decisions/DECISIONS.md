@@ -591,6 +591,32 @@ Consequences carried out with this decision:
   match; the code and this decision are the source of truth until it is.
 Status: DECIDED
 
+## D-048 · 2026-09-14 · deviation_min stays on the server, as an accepted risk
+`deviation_min` continues to be uploaded and stored. No schema change, no payload change.
+**Revisit before any pod holds real rows.**
+
+This closes AUDIT-01's A1 as an *accepted* risk rather than a solved one, and the distinction
+matters. The finding stands: `deviation_min` alongside the member's own bed and wake targets lets
+their sleep times be reconstructed to about ±5 minutes. Nothing about that has changed — the
+founder has decided the exposure is acceptable for now, not that it does not exist.
+
+Why it is tolerable today: `daily_states` is readable only by its owner (RLS, proven 8/8), and
+the witness projection cannot return the column at all — `witness_nights` is a security-definer
+function whose return type is `(night_date, state, streak)`, so a witness has no path to it
+(D-005, R-004A §2). The exposure is therefore to the member themselves and to anyone who obtains
+their account, not to the pod.
+
+Why it must be revisited before real pods: the argument above rests entirely on nobody else
+reaching the column. Every future feature that widens server-side reads — an admin view, an
+analytics export, a support tool, a second projection written in a hurry — is a chance to undo
+it, and the failure would be silent.
+
+Copy consequence, done in T-005: the "what leaves this phone" text on Settings and the sign-in
+screen must both say the minutes-off figure is stored on the account and visible only to the
+member. Listing it among what is uploaded was accurate but incomplete — a reader could
+reasonably assume a number sent to a shared server is a number a pod can see.
+Status: DECIDED (accepted risk, revisit before the first real pod)
+
 ## T-003 · REOPENED by the checker · 2026-09-08
 T-003 is **REOPENED**, not IN_REVIEW. Two acceptance criteria remain open:
 - **AC-3.5** — NOT VERIFIED. No live session has been intercepted.

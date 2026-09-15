@@ -75,6 +75,37 @@ describe('DEF-005-05 — skipped nights are derived, not left absent', () => {
   });
 });
 
+describe('D-048 — the minutes-off figure is disclosed, and disclosed fully', () => {
+  const SETTINGS = read('../app/src/ui/SettingsScreen.tsx');
+  const SIGNIN = read('../app/src/ui/SignInScreen.tsx');
+
+  // Listing deviation_min among what is uploaded was accurate but incomplete: a
+  // reader could reasonably assume a number sent to a shared server is a number
+  // a pod can see. D-048 keeps the column, so the copy has to carry the weight.
+  for (const [name, src] of [
+    ['Settings', SETTINGS],
+    ['Sign-in', SIGNIN],
+  ] as const) {
+    it(`${name} says the minutes figure is stored on the account`, () => {
+      expect(src).toMatch(/stored on your account/);
+    });
+
+    it(`${name} says only the member can see it`, () => {
+      expect(src).toMatch(/[Oo]nly you can see it/);
+    });
+
+    it(`${name} makes no health claim`, () => {
+      for (const claim of ['improve', 'better sleep', 'healthier', 'cure', 'treat', 'diagnos']) {
+        expect(src.toLowerCase()).not.toContain(claim);
+      }
+    });
+  }
+
+  it('Settings names the pod explicitly, since that is the assumption being corrected', () => {
+    expect(SETTINGS).toMatch(/pod/i);
+  });
+});
+
 describe('AC-5.7 — one vocabulary for a state, and a usable No-data hint', () => {
   it('the status line prints the label, never the raw enum', () => {
     expect(APP).toMatch(/STATE_LABEL\[outcome\.stored\.state\]/);
