@@ -28,6 +28,57 @@ async function serverNow(): Promise<{ serverMs: number }> {
  * Ensure the signed-in user has a row and a server-side commitment, and return
  * that commitment's id. Cached locally so this is one round trip, not one a night.
  */
+/** A commitment as the server holds it. `createdAtMs` is local-only, for the catch-up cut. */
+export interface RemoteCommitment {
+  readonly id: number;
+  readonly bedTargetMin: number;
+  readonly wakeTargetMin: number;
+  readonly toleranceMin: number;
+  readonly createdAtMs: number;
+}
+
+/**
+ * The signed-in user's earliest commitment, or null if they have none.
+ *
+ * Earliest rather than latest on purpose: it is the one the catch-up must cut
+ * at. A later row would shorten the member's own history, which is the whole of
+ * DEF-005-06.
+ *
+ * RLS restricts this to the caller's own rows, so no user filter is needed here
+ * and adding one would only give a false impression of where the boundary is.
+ */
+export async function fetchRemoteCommitment(): Promise<RemoteCommitment | null> {
+  const { data, error } = await getSupabase()
+    .from('commitments')
+    .select('id, bed_target_min, wake_target_min, tolerance_min, created_at')
+    .order('created_at', { ascending: true })
+    .limit(1);
+  if (error) throw new Error(error.message);
+  const row = data?.[0];
+  if (!row) return null;
+  return {
+    id: Number(row.id),
+    bedTargetMin: Number(row.bed_target_min),
+    wakeTargetMin: Number(row.wake_target_min),
+    toleranceMin: Number(row.tolerance_min),
+    createdAtMs: Date.parse(String(row.created_at)),
+  };
+}
+
+/**
+ * Get this user's server commitment id, adopting an existing row if there is one
+ * and creating one only if there is not.
+ *
+ * DEF-005-06: this used to insert unconditionally whenever the local cache was
+ * empty — and a reinstall wipes the local cache. So every fresh install minted a
+ * second commitment row for the same person, and the local catch-up then cut at
+ * the *new* row's date, permanently truncating their history at the reinstall.
+ * A second device did the same thing. One member could accumulate a commitment
+ * per install, each one a separate promise the server believes in.
+ *
+ * Adopting is also the only safe direction: the rows are already referenced by
+ * `daily_states.commitment_id`, so nothing here deletes or merges anything.
+ */
 export async function ensureRemoteCommitment(
   local: StoredCommitment,
 ): Promise<number> {
@@ -45,6 +96,13 @@ export async function ensureRemoteCommitment(
     .from('users')
     .upsert({ id: userId, platform: 'android' }, { onConflict: 'id' });
   if (userErr) throw new Error(userErr.message);
+
+  // Adopt before creating. This is the duplicate fix.
+  const existing = await fetchRemoteCommitment();
+  if (existing !== null) {
+    await kvSetNumber(KEY_REMOTE_COMMITMENT_ID, existing.id);
+    return existing.id;
+  }
 
   // DEF-005-02: through the whitelist, not built inline. This was the last write
   // path in the app that constructed its own body.

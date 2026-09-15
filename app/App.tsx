@@ -37,10 +37,16 @@ import {
   deleteAccount,
   drainQueue,
   exportOwnRows,
+  fetchRemoteCommitment,
   queueNight,
 } from './src/backend/sync';
 import { pendingCount } from './src/backend/syncQueue';
-import { KEY_CLOCK_OFFSET_MIN, kvGetNumber } from './src/storage/kv';
+import {
+  KEY_CLOCK_OFFSET_MIN,
+  KEY_REMOTE_COMMITMENT_ID,
+  kvGetNumber,
+  kvSetNumber,
+} from './src/storage/kv';
 import { NO_DATA_HINT } from './src/eligibility';
 import { CommitmentScreen } from './src/ui/CommitmentScreen';
 import { SignInScreen } from './src/ui/SignInScreen';
@@ -116,6 +122,45 @@ export default function App() {
     setPendingSync(await pendingCount());
     setClockOffsetMin(await kvGetNumber(KEY_CLOCK_OFFSET_MIN));
     return r;
+  }, []);
+
+  /**
+   * Pull the promise back from the server if this account already has one.
+   *
+   * DEF-005-06. A fresh install has no local commitment, so the app asked for a
+   * new one and minted a second server row — leaving the member with two
+   * promises the server believes in, and a history truncated at the reinstall
+   * because the catch-up cuts at the local `createdAt`. Restoring the original,
+   * `created_at` included, is what makes the catch-up reach back past the
+   * reinstall to where the promise actually began.
+   *
+   * Returns the adopted commitment, or null when the account has none — which is
+   * the genuinely new member, and the only case where creating one is right.
+   */
+  const restoreCommitment = useCallback(async (): Promise<StoredCommitment | null> => {
+    if (!backendConfigured()) return null;
+    let remote;
+    try {
+      remote = await fetchRemoteCommitment();
+    } catch {
+      // Offline or refused: a member who is merely offline must not be walked
+      // through making a second promise, so this stays null and the caller
+      // leaves the promise screen alone rather than treating it as "no promise".
+      return null;
+    }
+    if (remote === null) return null;
+
+    const stored = await saveCommitment(
+      {
+        bedTargetMin: remote.bedTargetMin,
+        wakeTargetMin: remote.wakeTargetMin,
+        toleranceMin: remote.toleranceMin as Commitment['toleranceMin'],
+      },
+      remote.createdAtMs,
+    );
+    await kvSetNumber(KEY_REMOTE_COMMITMENT_ID, remote.id);
+    setCommitment(stored);
+    return stored;
   }, []);
 
   /**
@@ -273,7 +318,16 @@ export default function App() {
           return;
         }
         if (existing === null) {
-          setRoute('commitment');
+          // DEF-005-06: signed in, but nothing local — a reinstall, or a second
+          // device. Ask the server before asking the member.
+          const restored = session !== null ? await restoreCommitment() : null;
+          if (restored === null) {
+            setRoute('commitment');
+            return;
+          }
+          setRoute('history');
+          await refreshSummary(restored.id);
+          await sync(restored);
           return;
         }
 
@@ -296,7 +350,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [refreshSummary, sync]);
+  }, [refreshSummary, sync, restoreCommitment]);
 
   /**
    * Drain the queue whenever the app comes to the foreground (AC-R3, deliverable 4).
@@ -376,10 +430,16 @@ export default function App() {
       });
       if (e) throw new Error(e.message);
       setEmail(addr);
-      setRoute(commitment === null ? 'commitment' : 'history');
-      if (commitment !== null) await sync(commitment);
+
+      // DEF-005-06: adopt the account's existing promise before offering to make
+      // a new one. Without this, every reinstall and every second device asked
+      // for a promise that already existed.
+      const active = commitment ?? (await restoreCommitment());
+
+      setRoute(active === null ? 'commitment' : 'history');
+      if (active !== null) await sync(active);
     },
-    [commitment, sync],
+    [commitment, restoreCommitment, sync],
   );
 
   const handleExport = useCallback(async () => {
