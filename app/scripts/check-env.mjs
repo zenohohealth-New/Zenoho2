@@ -70,8 +70,8 @@ if (problems.length > 0) {
   for (const p of problems) console.error(`  - ${p}`);
   console.error(
     '\n  In an EAS build these come from the profile\'s environment variables:\n' +
-      '    npx eas-cli env:list --environment preview\n' +
-      '    npx eas-cli env:set --name <NAME> --value <VALUE> \\\n' +
+      '    npx eas-cli@24.3.0 env:list --environment preview\n' +
+      '    npx eas-cli@24.3.0 env:set --name <NAME> --value <VALUE> \\\n' +
       '      --visibility plaintext --scope project --environment <preview|development|production>\n' +
       '  Locally they come from app/.env (see app/.env.example).\n',
   );

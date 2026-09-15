@@ -23,6 +23,10 @@ You are the MAKER for Zenoho2. Claude Web is the CHECKER. The founder is the app
 - Do not mark a task DONE; set IN_REVIEW. The checker marks DONE.
 
 ## External contracts (things outside the repo that can break it)
+- **Pin the EAS CLI: `npx eas-cli@24.3.0`** (D-065). Never `@latest` — it resolved to an
+  unpublished `24.5.0` on 2026-09-15 and failed the build with `ETARGET`. A build tool that
+  resolves differently each run makes a build impossible to attribute to a commit, and this
+  project has already had one build mistaken for another (`6e4fb185`, R-005 §12).
 - **AC-3.5-v — LAUNCH GATE, unmet.** Before any invite goes out, proxy the phone (mitmproxy) and
   capture one **KEPT** night's upload, then confirm the body carries no timestamp inside the
   sleep window, no HR value and no RHR value. T-003 closed AC-3.5 at the *key* level only:

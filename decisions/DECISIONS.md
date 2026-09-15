@@ -617,6 +617,26 @@ member. Listing it among what is uploaded was accurate but incomplete — a read
 reasonably assume a number sent to a shared server is a number a pod can see.
 Status: DECIDED (accepted risk, revisit before the first real pod)
 
+## D-065 · 2026-09-15 · Pin `eas-cli@24.3.0` in every build command
+Every invocation of the EAS CLI names an exact version. `npx eas-cli@latest` is not used
+anywhere: not in a build command, not in a report's instructions, not in the text a script prints
+for a human to copy.
+
+Why, from the failure: the T-005 build of 2026-09-15 failed outright with
+`npm error code ETARGET — no matching version found for eas-cli@24.5.0`. The `latest` dist-tag
+pointed at a version that was not actually published. Re-running with `eas-cli@24.3.0` — the
+version every earlier build in this project used — succeeded immediately with no other change.
+
+That failure was loud and cost minutes. The reason to pin is the quiet version. A build tool that
+resolves to something different each time is a build tool whose output cannot be attributed to a
+commit with certainty, and this project has already had one build mistaken for another:
+`6e4fb185` finished successfully, looked identical to a good build from the outside, and carried
+DEF-005-01. The only thing distinguishing it was its `Commit` field. Adding "and which CLI
+built it" to the list of things nobody can tell by looking is how a dead build gets installed.
+
+Upgrading is a deliberate act: change the pin, say so in the report, and note what moved.
+Status: DECIDED
+
 ## T-003 · REOPENED by the checker · 2026-09-08
 T-003 is **REOPENED**, not IN_REVIEW. Two acceptance criteria remain open:
 - **AC-3.5** — NOT VERIFIED. No live session has been intercepted.
